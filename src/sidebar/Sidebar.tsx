@@ -1,37 +1,63 @@
 import { useMemo, useState } from 'react'
 
-import type { FetchedDiscussion } from '../lib/fetchGitLabDiscussions'
+import type { ReviewTaskSnapshot } from '../contexts/task-management/domain'
 
 export type LoadState =
   | { kind: 'loading' }
-  | { kind: 'ok'; discussions: FetchedDiscussion[] }
+  | { kind: 'ok'; tasks: ReviewTaskSnapshot[] }
   | { kind: 'error'; message: string }
+
+export type DispatchOutcome = 'success' | 'error'
+export type DispatchHandler = (taskId: string) => Promise<DispatchOutcome>
 
 export type SidebarProps = {
   mrTitle: string
   loadState: LoadState
   onRefresh: () => void
+  onDispatch: DispatchHandler
 }
 
-export function Sidebar({ mrTitle, loadState, onRefresh }: SidebarProps) {
+type DispatchUiState =
+  | { kind: 'idle' }
+  | { kind: 'pending' }
+  | { kind: 'done'; at: number }
+  | { kind: 'error'; message: string }
+
+export function Sidebar({ mrTitle, loadState, onRefresh, onDispatch }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
-  const [showGeneral, setShowGeneral] = useState(false)
+  const [showResolved, setShowResolved] = useState(false)
+  const [dispatchState, setDispatchState] = useState<Record<string, DispatchUiState>>({})
 
-  const { open, resolved, visible } = useMemo(() => {
+  const { openCount, resolvedCount, visible } = useMemo(() => {
     if (loadState.kind !== 'ok') {
-      return { open: 0, resolved: 0, visible: [] as FetchedDiscussion[] }
+      return { openCount: 0, resolvedCount: 0, visible: [] as ReviewTaskSnapshot[] }
     }
-    // "Open" = резолвабельный тред в нерезолвленном состоянии (это и есть
-    // активный комментарий ревьюера). Общие треды и системные события
-    // не считаются "open" — это устраняет фантомные 5 open из багрепорта.
-    const filtered = showGeneral
-      ? loadState.discussions
-      : loadState.discussions.filter((d) => d.resolvable)
+    const tasks = loadState.tasks
+    const open = tasks.filter((t) => t.state !== 'RESOLVED' && t.state !== 'IGNORED')
+    const resolved = tasks.filter((t) => t.state === 'RESOLVED')
+    return {
+      openCount: open.length,
+      resolvedCount: resolved.length,
+      visible: showResolved ? tasks : open,
+    }
+  }, [loadState, showResolved])
 
-    const open = filtered.filter((d) => d.resolvable && !d.resolved).length
-    const resolved = filtered.filter((d) => d.resolved).length
-    return { open, resolved, visible: filtered }
-  }, [loadState, showGeneral])
+  const handleDispatch = async (taskId: string) => {
+    setDispatchState((s) => ({ ...s, [taskId]: { kind: 'pending' } }))
+    try {
+      const outcome = await onDispatch(taskId)
+      setDispatchState((s) => ({
+        ...s,
+        [taskId]:
+          outcome === 'success'
+            ? { kind: 'done', at: Date.now() }
+            : { kind: 'error', message: 'Dispatch failed' },
+      }))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Dispatch failed'
+      setDispatchState((s) => ({ ...s, [taskId]: { kind: 'error', message } }))
+    }
+  }
 
   return (
     <aside className={`grb-sidebar ${collapsed ? 'grb-sidebar--collapsed' : ''}`}>
@@ -66,28 +92,31 @@ export function Sidebar({ mrTitle, loadState, onRefresh }: SidebarProps) {
             {mrTitle || 'Untitled MR'}
           </div>
 
-          <SidebarStatus state={loadState} open={open} resolved={resolved} />
+          <SidebarStatus state={loadState} open={openCount} resolved={resolvedCount} />
 
           <label className="grb-sidebar__toggle-row">
             <input
               type="checkbox"
-              checked={showGeneral}
-              onChange={(e) => setShowGeneral(e.target.checked)}
+              checked={showResolved}
+              onChange={(e) => setShowResolved(e.target.checked)}
             />
-            <span>Show general threads</span>
+            <span>Show resolved</span>
           </label>
 
           {loadState.kind === 'ok' &&
             (visible.length === 0 ? (
               <p className="grb-sidebar__muted">
-                {showGeneral
-                  ? 'No discussions on this MR.'
-                  : 'No code review threads. Toggle “Show general threads” to see general comments.'}
+                {showResolved ? 'No tasks on this MR.' : 'No open review tasks. 🎉'}
               </p>
             ) : (
               <ul className="grb-sidebar__list">
-                {visible.map((d) => (
-                  <DiscussionItem key={d.discussionId} discussion={d} />
+                {visible.map((t) => (
+                  <TaskItem
+                    key={t.id}
+                    task={t}
+                    dispatchState={dispatchState[t.id] ?? { kind: 'idle' }}
+                    onDispatch={() => handleDispatch(t.id)}
+                  />
                 ))}
               </ul>
             ))}
@@ -121,57 +150,114 @@ function SidebarStatus({
   )
 }
 
-function DiscussionItem({ discussion }: { discussion: FetchedDiscussion }) {
-  const firstHuman = discussion.notes.find((n) => !n.isSystem) ?? discussion.notes.at(0)
-  const replyCount = Math.max(
-    0,
-    discussion.notes.filter((n) => !n.isSystem).length - 1,
-  )
-  const isGeneral = !discussion.resolvable
+function TaskItem({
+  task,
+  dispatchState,
+  onDispatch,
+}: {
+  task: ReviewTaskSnapshot
+  dispatchState: DispatchUiState
+  onDispatch: () => void
+}) {
+  const head = task.context.discussionThread.at(0)
+  const replyCount = Math.max(0, task.context.discussionThread.length - 1)
+  const reviewer = head?.author ?? 'unknown'
+  const preview = head?.body?.trim() || '(empty comment)'
+
+  const stateBadge =
+    task.state === 'NEW' ? null : (
+      <span className={`grb-task__badge grb-task__badge--${task.state.toLowerCase()}`}>
+        {task.state}
+      </span>
+    )
 
   return (
     <li
       className={[
-        'grb-item',
-        discussion.resolved ? 'grb-item--resolved' : '',
-        isGeneral ? 'grb-item--general' : '',
+        'grb-task',
+        task.state === 'RESOLVED' ? 'grb-task--resolved' : '',
+        task.state === 'FAILED' ? 'grb-task--failed' : '',
       ]
         .filter(Boolean)
         .join(' ')}
     >
-      <div className="grb-item__row">
+      <div className="grb-task__row">
         <span
-          className={`grb-item__dot ${
-            discussion.resolved
-              ? 'grb-item__dot--resolved'
-              : isGeneral
-                ? 'grb-item__dot--general'
-                : ''
+          className={`grb-task__dot ${
+            task.state === 'RESOLVED' ? 'grb-task__dot--resolved' : ''
           }`}
           aria-hidden
         />
-        <span className="grb-item__file" title={discussion.filePath ?? ''}>
-          {isGeneral
-            ? 'general thread'
-            : discussion.filePath ?? 'no file context'}
-          {discussion.line !== null && (
-            <span className="grb-item__line">:{discussion.line}</span>
+        <span className="grb-task__file" title={task.context.filePath || 'no file context'}>
+          {task.context.filePath || 'general thread'}
+          {task.context.line > 0 && (
+            <span className="grb-task__line">:{task.context.line}</span>
           )}
         </span>
+        {stateBadge}
       </div>
-      {firstHuman ? (
-        <div className="grb-item__body">
-          <span className="grb-item__author">@{firstHuman.author}</span>{' '}
-          <span className="grb-item__text">
-            {firstHuman.body || '(empty comment)'}
-          </span>
-        </div>
-      ) : (
-        <div className="grb-item__body grb-item__body--muted">(no comments)</div>
-      )}
+
+      <div className="grb-task__author">
+        <span className="grb-task__avatar" aria-hidden>
+          {initials(reviewer)}
+        </span>
+        <span className="grb-task__author-name">@{reviewer}</span>
+      </div>
+
+      <div className="grb-task__preview">{preview}</div>
       {replyCount > 0 && (
-        <div className="grb-item__replies">+{replyCount} more</div>
+        <div className="grb-task__replies">
+          +{replyCount} {replyCount === 1 ? 'reply' : 'replies'}
+        </div>
       )}
+
+      <div className="grb-task__actions">
+        <DispatchButton
+          state={dispatchState}
+          disabled={task.state === 'RESOLVED'}
+          onClick={onDispatch}
+        />
+        {dispatchState.kind === 'error' && (
+          <span className="grb-task__error" title={dispatchState.message}>
+            ✗ {dispatchState.message}
+          </span>
+        )}
+      </div>
     </li>
   )
+}
+
+function DispatchButton({
+  state,
+  disabled,
+  onClick,
+}: {
+  state: DispatchUiState
+  disabled: boolean
+  onClick: () => void
+}) {
+  const label =
+    state.kind === 'pending'
+      ? 'Copying…'
+      : state.kind === 'done'
+        ? '✓ Copied'
+        : 'Send to AI'
+  return (
+    <button
+      type="button"
+      className="grb-task__dispatch"
+      onClick={onClick}
+      disabled={disabled || state.kind === 'pending'}
+      aria-label="Copy AI prompt for this discussion"
+    >
+      {label}
+    </button>
+  )
+}
+
+function initials(name: string): string {
+  const parts = name.replace(/[@_.-]+/g, ' ').trim().split(/\s+/)
+  const first = parts.at(0)?.charAt(0) ?? '?'
+  const last = parts.length > 1 ? parts.at(-1)!.charAt(0) : ''
+  return (first + last).toUpperCase()
 }

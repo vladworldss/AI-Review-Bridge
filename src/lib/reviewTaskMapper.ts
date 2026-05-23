@@ -87,6 +87,11 @@ export class InMemoryReviewTaskStore {
     return this.byDiscussionId.get(discussionId)?.toSnapshot() ?? null
   }
 
+  /** Returns the live aggregate (for callers that need to mutate state). */
+  getEntity(discussionId: string): ReviewTask | null {
+    return this.byDiscussionId.get(discussionId) ?? null
+  }
+
   size(): number {
     return this.byDiscussionId.size
   }

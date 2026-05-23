@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PlasmoCSConfig, PlasmoGetRootContainer } from 'plasmo'
 
 import {
   FetchDiscussionsError,
   fetchGitLabDiscussions,
-  type FetchedDiscussion,
 } from '../lib/fetchGitLabDiscussions'
-import { Sidebar } from '../sidebar/Sidebar'
+import {
+  InMemoryReviewTaskStore,
+} from '../lib/reviewTaskMapper'
+import { dispatchFromStore } from '../lib/dispatchFromStore'
+import { Sidebar, type DispatchOutcome, type LoadState } from '../sidebar/Sidebar'
 
 import sidebarStyles from 'data-text:../sidebar/sidebar.css'
 
@@ -81,55 +84,77 @@ function extractMrTitle(): string {
   return text.replace(/\s*·.*$/, '').trim()
 }
 
-type LoadState =
-  | { kind: 'loading' }
-  | { kind: 'ok'; discussions: FetchedDiscussion[] }
-  | { kind: 'error'; message: string }
-
 function Content() {
+  // Single store instance per mount. URL changes within the same MR reuse it,
+  // cross-MR navigation calls store.clear() to drop stale tasks.
+  const store = useMemo(() => new InMemoryReviewTaskStore(), [])
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const [title, setTitle] = useState<string>(extractMrTitle())
-  const lastUrl = useRef<string>(window.location.href)
+  const lastMrIid = useRef<string | null>(null)
 
-  const load = useCallback(async (url: string) => {
-    setState({ kind: 'loading' })
-    setTitle(extractMrTitle())
-    try {
-      const { discussions } = await fetchGitLabDiscussions(url)
-      setState({ kind: 'ok', discussions })
-    } catch (err) {
-      const message =
-        err instanceof FetchDiscussionsError
-          ? err.message
-          : err instanceof Error
+  const sync = useCallback(
+    async (url: string) => {
+      setState({ kind: 'loading' })
+      setTitle(extractMrTitle())
+      try {
+        const { mrIid, discussions } = await fetchGitLabDiscussions(url)
+        if (lastMrIid.current && lastMrIid.current !== mrIid) {
+          store.clear()
+        }
+        lastMrIid.current = mrIid
+        const mrTitle = extractMrTitle()
+        store.syncFromDiscussions({ iid: mrIid, title: mrTitle }, discussions)
+        setState({ kind: 'ok', tasks: store.list() })
+      } catch (err) {
+        const message =
+          err instanceof FetchDiscussionsError
             ? err.message
-            : 'Unknown error'
-      setState({ kind: 'error', message })
-    }
-  }, [])
+            : err instanceof Error
+              ? err.message
+              : 'Unknown error'
+        setState({ kind: 'error', message })
+      }
+    },
+    [store],
+  )
 
   const refresh = useCallback(() => {
-    void load(window.location.href)
-  }, [load])
+    void sync(window.location.href)
+  }, [sync])
+
+  const onDispatch = useCallback(
+    async (taskId: string): Promise<DispatchOutcome> => {
+      const snap = store.list().find((t) => t.id === taskId)
+      if (!snap) return 'error'
+      try {
+        await dispatchFromStore(store, snap.discussionId, { agent: 'clipboard' })
+        setState({ kind: 'ok', tasks: store.list() })
+        return 'success'
+      } catch {
+        setState({ kind: 'ok', tasks: store.list() })
+        return 'error'
+      }
+    },
+    [store],
+  )
 
   useEffect(() => {
-    void load(window.location.href)
+    void sync(window.location.href)
 
     const onUrlChange = () => {
       const url = window.location.href
-      if (url === lastUrl.current) return
-      lastUrl.current = url
-      if (isMergeRequestPage(url)) void load(url)
+      if (isMergeRequestPage(url)) void sync(url)
     }
     window.addEventListener('grb:urlchange', onUrlChange)
     return () => window.removeEventListener('grb:urlchange', onUrlChange)
-  }, [load])
+  }, [sync])
 
   return (
     <Sidebar
       mrTitle={title}
       loadState={state}
       onRefresh={refresh}
+      onDispatch={onDispatch}
     />
   )
 }
