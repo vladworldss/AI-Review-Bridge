@@ -1,0 +1,1 @@
+Service worker entry. Handles cross-component messaging, lifecycle, alarms.

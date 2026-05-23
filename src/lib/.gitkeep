@@ -1,0 +1,1 @@
+Low-level utilities not tied to any bounded context (clipboard, messaging bus).

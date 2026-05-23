@@ -1,0 +1,1 @@
+Content scripts injected into gitlab.com MR pages. DOM parsing lives here.
