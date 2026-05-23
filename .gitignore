@@ -46,5 +46,5 @@ config.local.toml
 
 # scripts for local tests
 scripts/
-
+node_modules/
 CLAUDE.md
