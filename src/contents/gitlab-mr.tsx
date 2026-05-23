@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PlasmoCSConfig, PlasmoGetRootContainer } from 'plasmo'
 
-import { extractDiscussions } from '../contexts/gitlab-integration/application/ExtractDiscussions'
-import type {
-  ParsedDiscussion,
-  ParsedMergeRequest,
-} from '../contexts/gitlab-integration/domain'
+import {
+  FetchDiscussionsError,
+  fetchGitLabDiscussions,
+  type FetchedDiscussion,
+} from '../lib/fetchGitLabDiscussions'
 import { Sidebar } from '../sidebar/Sidebar'
 
 import sidebarStyles from 'data-text:../sidebar/sidebar.css'
@@ -50,8 +50,6 @@ function isMergeRequestPage(url: string): boolean {
   return /\/-\/merge_requests\/\d+/.test(url)
 }
 
-// GitLab is an SPA — pushState/replaceState change the URL without a full reload.
-// Re-emit them as a single 'grb:urlchange' event the React layer can subscribe to.
 function installUrlChangeBridge(): void {
   const w = window as Window & { __grbUrlChangeInstalled?: boolean }
   if (w.__grbUrlChangeInstalled) return
@@ -73,47 +71,67 @@ function installUrlChangeBridge(): void {
   window.addEventListener('popstate', fire)
 }
 
-function parseCurrentPage(): ParsedMergeRequest | null {
-  const { mr } = extractDiscussions({
-    document,
-    url: window.location.href,
-  })
-  return mr
+function extractMrTitle(): string {
+  const el =
+    document.querySelector('[data-testid="title-content"]') ??
+    document.querySelector('h1.title') ??
+    document.querySelector('meta[property="og:title"]')
+  const text =
+    el instanceof HTMLMetaElement ? el.content : (el?.textContent?.trim() ?? '')
+  return text.replace(/\s*·.*$/, '').trim()
 }
 
-function Content() {
-  const [mr, setMr] = useState<ParsedMergeRequest | null>(() => parseCurrentPage())
+type LoadState =
+  | { kind: 'loading' }
+  | { kind: 'ok'; discussions: FetchedDiscussion[] }
+  | { kind: 'error'; message: string }
 
-  const refresh = useCallback(() => {
-    setMr(parseCurrentPage())
+function Content() {
+  const [state, setState] = useState<LoadState>({ kind: 'loading' })
+  const [title, setTitle] = useState<string>(extractMrTitle())
+  const lastUrl = useRef<string>(window.location.href)
+
+  const load = useCallback(async (url: string) => {
+    setState({ kind: 'loading' })
+    setTitle(extractMrTitle())
+    try {
+      const { discussions } = await fetchGitLabDiscussions(url)
+      setState({ kind: 'ok', discussions })
+    } catch (err) {
+      const message =
+        err instanceof FetchDiscussionsError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Unknown error'
+      setState({ kind: 'error', message })
+    }
   }, [])
 
+  const refresh = useCallback(() => {
+    void load(window.location.href)
+  }, [load])
+
   useEffect(() => {
-    refresh()
+    void load(window.location.href)
 
-    const onUrlChange = () => refresh()
-    window.addEventListener('grb:urlchange', onUrlChange)
-
-    // GitLab streams in discussion threads after initial paint; observe the
-    // body and debounce re-parses so we pick them up without burning CPU.
-    let debounce: ReturnType<typeof setTimeout> | null = null
-    const observer = new MutationObserver(() => {
-      if (debounce) clearTimeout(debounce)
-      debounce = setTimeout(refresh, 250)
-    })
-    observer.observe(document.body, { childList: true, subtree: true })
-
-    return () => {
-      window.removeEventListener('grb:urlchange', onUrlChange)
-      observer.disconnect()
-      if (debounce) clearTimeout(debounce)
+    const onUrlChange = () => {
+      const url = window.location.href
+      if (url === lastUrl.current) return
+      lastUrl.current = url
+      if (isMergeRequestPage(url)) void load(url)
     }
-  }, [refresh])
+    window.addEventListener('grb:urlchange', onUrlChange)
+    return () => window.removeEventListener('grb:urlchange', onUrlChange)
+  }, [load])
 
-  const discussions: ParsedDiscussion[] = mr?.discussions ?? []
-  const title = mr?.title ?? ''
-
-  return <Sidebar mrTitle={title} discussions={discussions} onRefresh={refresh} />
+  return (
+    <Sidebar
+      mrTitle={title}
+      loadState={state}
+      onRefresh={refresh}
+    />
+  )
 }
 
 export default Content
