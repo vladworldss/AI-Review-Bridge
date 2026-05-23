@@ -9,6 +9,7 @@ import {
   renderEnvelopeAsText,
   type PromptEnvelope,
 } from '../contexts/ai-dispatch/domain'
+import { BrowserClipboardAdapter } from '../contexts/ai-dispatch/infrastructure/BrowserClipboardAdapter'
 import type { AgentTarget, ReviewTaskSnapshot } from '../contexts/task-management/domain'
 import type { InMemoryReviewTaskStore } from './reviewTaskMapper'
 
@@ -31,9 +32,13 @@ export class DispatchError extends Error {
   }
 }
 
-const defaultClipboard: ClipboardWriter = async (text) => {
-  await navigator.clipboard.writeText(text)
-}
+const defaultClipboard: ClipboardWriter = (() => {
+  let adapter: BrowserClipboardAdapter | null = null
+  return async (text) => {
+    adapter ??= new BrowserClipboardAdapter()
+    await adapter.write(text)
+  }
+})()
 
 export async function dispatchFromStore(
   store: InMemoryReviewTaskStore,
