@@ -90,7 +90,12 @@ describe('ReviewTask lifecycle', () => {
   it('rejects illegal transitions', () => {
     const task = newTask()
     expect(() => task.markInProgress()).toThrow(IllegalTaskTransitionError)
-    expect(() => task.resolve()).toThrow(IllegalTaskTransitionError)
+  })
+
+  it('allows direct NEW → RESOLVED for discussions resolved without dispatch', () => {
+    const task = newTask()
+    task.resolve()
+    expect(task.state).toBe(TaskState.RESOLVED)
   })
 
   it('rejects transitions out of terminal states', () => {

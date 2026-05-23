@@ -73,7 +73,8 @@ function splitThread(
     return { reviewComment: '', thread: [] }
   }
   const [head, ...rest] = messages
-  const thread = rest.slice(-Math.max(0, maxMessages - 1))
+  const keep = Math.max(0, maxMessages - 1)
+  const thread = keep === 0 ? [] : rest.slice(-keep)
   return { reviewComment: head!.body, thread }
 }
 

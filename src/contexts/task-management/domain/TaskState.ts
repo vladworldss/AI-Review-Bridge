@@ -10,10 +10,10 @@ export const TaskState = {
 export type TaskState = (typeof TaskState)[keyof typeof TaskState]
 
 const transitions: Record<TaskState, ReadonlyArray<TaskState>> = {
-  NEW: ['DISPATCHED', 'IGNORED'],
-  DISPATCHED: ['IN_PROGRESS', 'FAILED', 'IGNORED'],
+  NEW: ['DISPATCHED', 'RESOLVED', 'IGNORED'],
+  DISPATCHED: ['IN_PROGRESS', 'RESOLVED', 'FAILED', 'IGNORED'],
   IN_PROGRESS: ['RESOLVED', 'FAILED', 'IGNORED'],
-  FAILED: ['DISPATCHED', 'IGNORED'],
+  FAILED: ['DISPATCHED', 'RESOLVED', 'IGNORED'],
   RESOLVED: [],
   IGNORED: [],
 }
