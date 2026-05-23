@@ -48,3 +48,8 @@ config.local.toml
 scripts/
 node_modules/
 CLAUDE.md
+
+# Plasmo / Parcel build artifacts
+.plasmo/
+.parcel-cache/
+build/

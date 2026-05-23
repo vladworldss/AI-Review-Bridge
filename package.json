@@ -1,18 +1,36 @@
 {
   "name": "gitlab-ai-review-bridge",
+  "displayName": "GitLab AI Review Bridge",
   "version": "0.0.0",
+  "description": "Turn GitLab MR review discussions into AI-ready execution tasks.",
   "private": true,
-  "type": "module",
   "scripts": {
+    "dev": "PARCEL_WORKERS=0 plasmo dev",
+    "build": "PARCEL_WORKERS=0 plasmo build",
+    "package": "PARCEL_WORKERS=0 plasmo package",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@types/chrome": "^0.1.42",
     "@types/jsdom": "^28.0.3",
     "@types/node": "^25.9.1",
+    "@types/react": "^18.3.29",
+    "@types/react-dom": "^18.3.7",
     "jsdom": "^24.1.3",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "plasmo": "^0.90.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "manifest": {
+    "host_permissions": [
+      "https://gitlab.com/*",
+      "https://gitlab.example.com/*"
+    ]
   }
 }
