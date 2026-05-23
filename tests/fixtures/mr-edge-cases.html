@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head><title>MR · edge cases</title></head>
+<body>
+  <h1 class="title">Edge case MR</h1>
+
+  <div data-discussion-id="orphan-1" data-resolved="false">
+    <ul>
+      <li data-note-id="n10">
+        <div class="note-header-info">
+          <a class="author-link">reviewer-x</a>
+        </div>
+        <div class="note-text">Overall comment, no diff context.</div>
+      </li>
+    </ul>
+  </div>
+
+  <div class="diff-file" data-path="src/big.ts">
+    <div class="diff-content">
+      <table>
+        <tr class="line_holder">
+          <td class="diff-line-num new" data-linenumber="5">5</td>
+          <td>line 5</td>
+        </tr>
+      </table>
+
+      <div data-discussion-id="del-1" data-line-number="5" data-resolved="false">
+        <ul>
+          <li data-note-id="n20" class="deleted-note">
+            <div class="note-text">This comment was deleted</div>
+          </li>
+          <li data-note-id="n21">
+            <div class="note-header-info"><a class="author-link">reviewer-y</a></div>
+            <div class="note-text">Replacement comment.</div>
+          </li>
+        </ul>
+      </div>
+
+      <div data-discussion-id="big-thread" data-line-number="5" data-resolved="false">
+        <ul>
+          <li data-note-id="b1"><div class="note-header-info"><a class="author-link">u1</a></div><div class="note-text">m1</div></li>
+          <li data-note-id="b2"><div class="note-header-info"><a class="author-link">u2</a></div><div class="note-text">m2</div></li>
+          <li data-note-id="b3"><div class="note-header-info"><a class="author-link">u3</a></div><div class="note-text">m3</div></li>
+          <li data-note-id="b4"><div class="note-header-info"><a class="author-link">u4</a></div><div class="note-text">m4</div></li>
+          <li data-note-id="b5"><div class="note-header-info"><a class="author-link">u5</a></div><div class="note-text">m5</div></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
