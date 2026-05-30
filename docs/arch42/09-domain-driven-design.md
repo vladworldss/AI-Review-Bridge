@@ -50,4 +50,5 @@ type ReviewTask = {
 - ReviewTaskCreated
 - ReviewTaskDispatched
 - ReviewTaskResolved
+- ReviewTaskWithdrawn   # source discussion no longer present in GitLab (e.g. comment deleted)
 - DispatchFailed

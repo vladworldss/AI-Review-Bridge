@@ -186,17 +186,32 @@ describe('InMemoryReviewTaskStore.syncFromDiscussions', () => {
     expect(store.get('d1')?.state).toBe(TaskState.RESOLVED)
   })
 
-  it('orphans (discussions that disappear) are left alone', () => {
+  it('prunes tasks whose discussion disappears (deleted comment in GitLab)', () => {
     const store = new InMemoryReviewTaskStore(fixedClock(), idGen())
     store.syncFromDiscussions(mr, [
       makeDiscussion({ discussionId: 'd1' }),
       makeDiscussion({ discussionId: 'd2' }),
     ])
 
-    store.syncFromDiscussions(mr, [makeDiscussion({ discussionId: 'd1' })])
+    const result = store.syncFromDiscussions(mr, [makeDiscussion({ discussionId: 'd1' })])
 
-    expect(store.size()).toBe(2)
-    expect(store.get('d2')?.state).toBe(TaskState.NEW)
+    expect(store.size()).toBe(1)
+    expect(store.get('d1')?.state).toBe(TaskState.NEW)
+    expect(store.get('d2')).toBeNull()
+    expect(result.removed.map((t) => t.discussionId)).toEqual(['d2'])
+  })
+
+  it('prunes a task when its discussion becomes unresolvable', () => {
+    const store = new InMemoryReviewTaskStore(fixedClock(), idGen())
+    store.syncFromDiscussions(mr, [makeDiscussion({ discussionId: 'd1', resolvable: true })])
+    expect(store.size()).toBe(1)
+
+    const result = store.syncFromDiscussions(mr, [
+      makeDiscussion({ discussionId: 'd1', resolvable: false }),
+    ])
+
+    expect(store.size()).toBe(0)
+    expect(result.removed.map((t) => t.discussionId)).toEqual(['d1'])
   })
 })
 

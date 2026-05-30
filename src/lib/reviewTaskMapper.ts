@@ -67,6 +67,7 @@ function toCommentContext(mrTitle: string, d: FetchedDiscussion): CommentContext
 export type SyncResult = {
   created: ReviewTaskSnapshot[]
   resolved: ReviewTaskSnapshot[]
+  removed: ReviewTaskSnapshot[]
   skipped: number
 }
 
@@ -106,13 +107,21 @@ export class InMemoryReviewTaskStore {
   ): SyncResult {
     const created: ReviewTaskSnapshot[] = []
     const resolved: ReviewTaskSnapshot[] = []
+    const removed: ReviewTaskSnapshot[] = []
     let skipped = 0
+
+    // Track which discussions GitLab still reports as resolvable, so we can
+    // prune tasks whose discussion was deleted/unresolvabled since last sync.
+    // Without this, a comment deleted in GitLab lingers in the sidebar until
+    // a full page reload rebuilds the store from scratch.
+    const seen = new Set<string>()
 
     for (const d of discussions) {
       if (!d.resolvable) {
         skipped++
         continue
       }
+      seen.add(d.discussionId)
 
       const existing = this.byDiscussionId.get(d.discussionId)
       if (existing) {
@@ -140,7 +149,15 @@ export class InMemoryReviewTaskStore {
       created.push(task.toSnapshot())
     }
 
-    return { created, resolved, skipped }
+    // Prune tasks for discussions GitLab no longer returns (deleted comments).
+    for (const [discussionId, task] of this.byDiscussionId) {
+      if (!seen.has(discussionId)) {
+        this.byDiscussionId.delete(discussionId)
+        removed.push(task.toSnapshot())
+      }
+    }
+
+    return { created, resolved, removed, skipped }
   }
 }
 
