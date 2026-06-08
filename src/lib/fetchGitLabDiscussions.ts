@@ -78,9 +78,16 @@ export function extractMrIid(mrUrl: string): string | null {
   return m ? (m[1] ?? null) : null
 }
 
-// Hard cap so a misbehaving pagination signal can't loop forever.
-// 50 pages × 100 = 5000 discussions, far beyond any real MR.
-const MAX_PAGES = 50
+// Page budget. 3 × 100 = 300 discussions, which covers essentially every MR.
+// GitLab orders discussions oldest→newest, so OPEN threads (the ones the user
+// acts on) sit at the tail — the cap must be generous enough not to clip them.
+// Beyond 300 we stop; a future "load more" button can extend this if needed.
+const MAX_PAGES = 3
+
+// Page size. Big enough that any normal MR fits in a single request — the
+// server-side latency per request (~1.3s on self-hosted) dwarfs the extra
+// payload, so one fat request beats several thin ones.
+const PER_PAGE = 100
 
 export async function fetchGitLabDiscussions(
   mrUrl: string,
@@ -95,7 +102,7 @@ export async function fetchGitLabDiscussions(
   let page = 1
 
   for (let i = 0; i < MAX_PAGES; i++) {
-    const url = discussionsUrlFor(mrUrl, page)!
+    const url = discussionsUrlFor(mrUrl, page, PER_PAGE)!
 
     const res = await fetchImpl(url, {
       headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
@@ -117,11 +124,13 @@ export async function fetchGitLabDiscussions(
     // Decide whether to fetch another page:
     //  - header present with a number → that's the next page
     //  - header present but empty → GitLab says this was the last page → stop
-    //  - header absent (some proxies strip it) → fall back to "stop when the
-    //    page is empty", otherwise advance by one
+    //  - header absent (this instance) → a short page (fewer than PER_PAGE) is
+    //    the last one, so we DON'T pay for a wasted +1 request just to see an
+    //    empty page. Only a brim-full page implies there may be more.
+    const pageLen = Array.isArray(raw) ? raw.length : 0
     const next = nextPageFrom(res.headers)
     if (next === 'absent') {
-      if (!Array.isArray(raw) || raw.length === 0) break
+      if (pageLen < PER_PAGE) break
       page += 1
     } else if (next === null) {
       break // present-but-empty / invalid → no more pages

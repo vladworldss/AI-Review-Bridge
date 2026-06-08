@@ -90,15 +90,34 @@ describe('fetchGitLabDiscussions — pagination', () => {
     expect(result.discussions).toHaveLength(1)
   })
 
+  it('makes only ONE request when the first page is short (no header, < per_page)', async () => {
+    // The common case on instances without pagination headers: a 43-discussion
+    // MR comes back in one page < 100, so we must NOT fire a wasted page 2.
+    let n = 0
+    const fakeFetch = (async () => {
+      n++
+      const items = Array.from({ length: 43 }, (_, i) => disc(`d${i}`, 'x'))
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => items } as unknown as Response
+    }) as unknown as typeof fetch
+
+    const result = await fetchGitLabDiscussions(MR, fakeFetch)
+    expect(n).toBe(1)
+    expect(result.discussions).toHaveLength(43)
+  })
+
   it('falls back to length-based paging when X-Next-Page is absent', async () => {
+    // A brim-full page (exactly PER_PAGE=100) means "there may be more", so we
+    // advance; the next short page ends it.
+    const full = Array.from({ length: 100 }, (_, i) => disc(`d${i}`, 'x'))
     const pages = [
-      { ok: true, status: 200, headers: { get: () => null }, json: async () => [disc('d1', 'a')] },
-      { ok: true, status: 200, headers: { get: () => null }, json: async () => [] },
+      { ok: true, status: 200, headers: { get: () => null }, json: async () => full },
+      { ok: true, status: 200, headers: { get: () => null }, json: async () => [disc('tail', 'last')] },
     ] as unknown as Response[]
     const fakeFetch = (async () => pages.shift()!) as unknown as typeof fetch
 
     const result = await fetchGitLabDiscussions(MR, fakeFetch)
-    expect(result.discussions.map((d) => d.discussionId)).toEqual(['d1'])
+    expect(result.discussions).toHaveLength(101)
+    expect(result.discussions.at(-1)?.discussionId).toBe('tail')
   })
 
   it('throws on a non-OK response', async () => {
