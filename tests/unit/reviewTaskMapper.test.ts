@@ -124,7 +124,7 @@ describe('toReviewTask', () => {
 describe('InMemoryReviewTaskStore.syncFromDiscussions', () => {
   const mr = { iid: '40', title: 'Refactor auth' }
 
-  it('creates ReviewTasks only for resolvable discussions', () => {
+  it('creates ReviewTasks for every discussion with a human note, regardless of resolvable', () => {
     const store = new InMemoryReviewTaskStore(fixedClock(), idGen())
     const result = store.syncFromDiscussions(mr, [
       makeDiscussion({ discussionId: 'd1', resolvable: true }),
@@ -132,10 +132,57 @@ describe('InMemoryReviewTaskStore.syncFromDiscussions', () => {
       makeDiscussion({ discussionId: 'd3', resolvable: true }),
     ])
 
-    expect(store.size()).toBe(2)
-    expect(result.created).toHaveLength(2)
+    expect(store.size()).toBe(3)
+    expect(result.created).toHaveLength(3)
+    expect(result.skipped).toBe(0)
+    expect(store.list().map((t) => t.discussionId).sort()).toEqual(['d1', 'd2', 'd3'])
+  })
+
+  it('skips threads that contain only system notes', () => {
+    const store = new InMemoryReviewTaskStore(fixedClock(), idGen())
+    const result = store.syncFromDiscussions(mr, [
+      makeDiscussion({
+        discussionId: 'sys-only',
+        resolvable: false,
+        notes: [
+          { noteId: 's1', author: 'gitlab', body: 'changed the description', createdAt: null, isSystem: true },
+        ],
+      }),
+      makeDiscussion({ discussionId: 'd1' }),
+    ])
+
+    expect(store.size()).toBe(1)
+    expect(result.created).toHaveLength(1)
     expect(result.skipped).toBe(1)
-    expect(store.list().map((t) => t.discussionId).sort()).toEqual(['d1', 'd3'])
+    expect(store.get('d1')).not.toBeNull()
+  })
+
+  it('pulls new replies into an existing task on re-sync', () => {
+    const store = new InMemoryReviewTaskStore(fixedClock(), idGen())
+    store.syncFromDiscussions(mr, [makeDiscussion({ discussionId: 'd1' })])
+    expect(store.get('d1')?.context.discussionThread).toHaveLength(2)
+
+    const withReply = makeDiscussion({
+      discussionId: 'd1',
+      notes: [
+        { noteId: 'n1', author: 'alice', body: 'race condition?', createdAt: '2026-05-23T09:00:00Z', isSystem: false },
+        { noteId: 'n2', author: 'bob', body: 'good catch', createdAt: '2026-05-23T09:05:00Z', isSystem: false },
+        { noteId: 'n3', author: 'carol', body: 'fixed in latest push', createdAt: '2026-05-23T10:00:00Z', isSystem: false },
+      ],
+    })
+    const result = store.syncFromDiscussions(mr, [withReply])
+
+    expect(result.updated).toHaveLength(1)
+    expect(store.get('d1')?.context.discussionThread).toHaveLength(3)
+    expect(store.get('d1')?.context.discussionThread.at(2)?.body).toBe('fixed in latest push')
+  })
+
+  it('does not report an update when the thread is unchanged', () => {
+    const store = new InMemoryReviewTaskStore(fixedClock(), idGen())
+    const list = [makeDiscussion({ discussionId: 'd1' })]
+    store.syncFromDiscussions(mr, list)
+    const result = store.syncFromDiscussions(mr, list)
+    expect(result.updated).toHaveLength(0)
   })
 
   it('is idempotent on repeat sync — does not duplicate tasks', () => {
@@ -201,7 +248,7 @@ describe('InMemoryReviewTaskStore.syncFromDiscussions', () => {
     expect(result.removed.map((t) => t.discussionId)).toEqual(['d2'])
   })
 
-  it('prunes a task when its discussion becomes unresolvable', () => {
+  it('keeps a task whose discussion becomes unresolvable (e.g. diff position staled after a rebase)', () => {
     const store = new InMemoryReviewTaskStore(fixedClock(), idGen())
     store.syncFromDiscussions(mr, [makeDiscussion({ discussionId: 'd1', resolvable: true })])
     expect(store.size()).toBe(1)
@@ -210,8 +257,10 @@ describe('InMemoryReviewTaskStore.syncFromDiscussions', () => {
       makeDiscussion({ discussionId: 'd1', resolvable: false }),
     ])
 
-    expect(store.size()).toBe(0)
-    expect(result.removed.map((t) => t.discussionId)).toEqual(['d1'])
+    // Still present — a rebase-staled comment is still real feedback, not a deletion.
+    expect(store.size()).toBe(1)
+    expect(result.removed).toHaveLength(0)
+    expect(store.get('d1')?.state).toBe(TaskState.NEW)
   })
 })
 

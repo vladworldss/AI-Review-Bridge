@@ -4,9 +4,14 @@
  * the content-script UI layer.
  *
  * Rules:
- *  - Only resolvable discussions become ReviewTasks (general threads are ignored).
- *  - sync() is upsert: new tasks are created, existing ones get task.resolve()
- *    called when GitLab reports the discussion as resolved.
+ *  - Any discussion with at least one human (non-system) note becomes a
+ *    ReviewTask. We do NOT require `resolvable` — general MR comments and
+ *    discussions whose diff position went stale after a rebase are reported by
+ *    GitLab as resolvable:false, yet they're still real review feedback the
+ *    user needs to see. (Pure system-note threads are still ignored as noise.)
+ *  - sync() is upsert: new tasks are created; existing ones get their thread
+ *    refreshed (new replies pulled in) and task.resolve() called when GitLab
+ *    reports the discussion as resolved.
  *  - In-memory state (dispatches, FAILED, etc.) is preserved across syncs.
  */
 
@@ -66,9 +71,15 @@ function toCommentContext(mrTitle: string, d: FetchedDiscussion): CommentContext
 
 export type SyncResult = {
   created: ReviewTaskSnapshot[]
+  updated: ReviewTaskSnapshot[]
   resolved: ReviewTaskSnapshot[]
   removed: ReviewTaskSnapshot[]
   skipped: number
+}
+
+/** A discussion is worth tracking if it carries at least one human note. */
+function hasHumanNote(d: FetchedDiscussion): boolean {
+  return d.notes.some((n) => !n.isSystem)
 }
 
 export class InMemoryReviewTaskStore {
@@ -106,6 +117,7 @@ export class InMemoryReviewTaskStore {
     discussions: ReadonlyArray<FetchedDiscussion>,
   ): SyncResult {
     const created: ReviewTaskSnapshot[] = []
+    const updated: ReviewTaskSnapshot[] = []
     const resolved: ReviewTaskSnapshot[] = []
     const removed: ReviewTaskSnapshot[] = []
     let skipped = 0
@@ -117,7 +129,11 @@ export class InMemoryReviewTaskStore {
     const seen = new Set<string>()
 
     for (const d of discussions) {
-      if (!d.resolvable) {
+      // Skip pure system-note threads (e.g. "changed the description") — they
+      // carry no human feedback. We intentionally do NOT filter on `resolvable`:
+      // general comments and rebase-staled diff notes come back as
+      // resolvable:false but are still real review feedback.
+      if (!hasHumanNote(d)) {
         skipped++
         continue
       }
@@ -125,6 +141,10 @@ export class InMemoryReviewTaskStore {
 
       const existing = this.byDiscussionId.get(d.discussionId)
       if (existing) {
+        // Pull in new replies that arrived since the task was created.
+        if (existing.refreshContext(toCommentContext(mr.title, d))) {
+          updated.push(existing.toSnapshot())
+        }
         if (d.resolved && !existing.isTerminal) {
           existing.resolve()
           resolved.push(existing.toSnapshot())
@@ -157,7 +177,7 @@ export class InMemoryReviewTaskStore {
       }
     }
 
-    return { created, resolved, removed, skipped }
+    return { created, updated, resolved, removed, skipped }
   }
 }
 

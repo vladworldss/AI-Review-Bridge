@@ -50,13 +50,22 @@ const MR_URL_PATTERN = /\/-\/merge_requests\/(\d+)(?:\/|$|\?|#)/
  * `https://host/group/project/-/merge_requests/40` →
  * `https://host/group/project/-/merge_requests/40/discussions.json`.
  */
-export function discussionsUrlFor(mrUrl: string): string | null {
+export function discussionsUrlFor(mrUrl: string, page = 1, perPage = 100): string | null {
   try {
     const u = new URL(mrUrl)
     const m = u.pathname.match(/^(.*\/-\/merge_requests\/\d+)/)
     if (!m) return null
     u.pathname = `${m[1]}/discussions.json`
-    u.search = ''
+    // GitLab paginates discussions (default per_page=20). Without paging we
+    // only ever saw the first 20, so newer threads — including comments that
+    // landed after a rebase — silently fell off the list. We request large
+    // pages (per_page=100) so a typical MR fits in one round-trip, and the
+    // fetch loop still walks further pages if the server signals more.
+    //
+    // Note: this instance returns no X-Next-Page / Link headers, so the loop
+    // relies on its length-based fallback (stop when a page is empty). The
+    // header path is kept for GitLab deployments that do paginate by offset.
+    u.search = `?per_page=${perPage}&page=${page}`
     u.hash = ''
     return u.toString()
   } catch {
@@ -69,30 +78,72 @@ export function extractMrIid(mrUrl: string): string | null {
   return m ? (m[1] ?? null) : null
 }
 
+// Hard cap so a misbehaving pagination signal can't loop forever.
+// 50 pages × 100 = 5000 discussions, far beyond any real MR.
+const MAX_PAGES = 50
+
 export async function fetchGitLabDiscussions(
   mrUrl: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<FetchResult> {
-  const url = discussionsUrlFor(mrUrl)
   const iid = extractMrIid(mrUrl)
-  if (!url || !iid) {
+  if (!iid || !discussionsUrlFor(mrUrl)) {
     throw new FetchDiscussionsError(`Not a GitLab MR URL: ${mrUrl}`)
   }
 
-  const res = await fetchImpl(url, {
-    headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-    credentials: 'same-origin',
-  })
+  const discussions: FetchedDiscussion[] = []
+  let page = 1
 
-  if (!res.ok) {
-    throw new FetchDiscussionsError(
-      `Failed to fetch discussions: HTTP ${res.status}`,
-      res.status,
-    )
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const url = discussionsUrlFor(mrUrl, page)!
+
+    const res = await fetchImpl(url, {
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+      cache: 'no-store',
+    })
+
+    if (!res.ok) {
+      throw new FetchDiscussionsError(
+        `Failed to fetch discussions: HTTP ${res.status}`,
+        res.status,
+      )
+    }
+
+    const raw = (await res.json()) as unknown
+    const batch = normalizeDiscussions(raw)
+    discussions.push(...batch)
+
+    // Decide whether to fetch another page:
+    //  - header present with a number → that's the next page
+    //  - header present but empty → GitLab says this was the last page → stop
+    //  - header absent (some proxies strip it) → fall back to "stop when the
+    //    page is empty", otherwise advance by one
+    const next = nextPageFrom(res.headers)
+    if (next === 'absent') {
+      if (!Array.isArray(raw) || raw.length === 0) break
+      page += 1
+    } else if (next === null) {
+      break // present-but-empty / invalid → no more pages
+    } else {
+      if (next <= page) break
+      page = next
+    }
   }
 
-  const raw = (await res.json()) as unknown
-  return { mrIid: iid, discussions: normalizeDiscussions(raw) }
+  return { mrIid: iid, discussions }
+}
+
+/**
+ * Reads X-Next-Page, distinguishing "header absent" from "header present but
+ * empty" — they mean different things (fall back to length-paging vs. stop).
+ */
+function nextPageFrom(headers: Headers): number | null | 'absent' {
+  const raw = headers.get?.('X-Next-Page')
+  if (raw === null || raw === undefined) return 'absent'
+  if (raw === '') return null
+  const n = Number.parseInt(raw, 10)
+  return Number.isNaN(n) || n <= 0 ? null : n
 }
 
 export function normalizeDiscussions(raw: unknown): FetchedDiscussion[] {

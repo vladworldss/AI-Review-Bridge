@@ -39,6 +39,14 @@
   letter-spacing: 0.2px;
 }
 
+.grb-sidebar__version {
+  margin-left: 6px;
+  font-weight: 400;
+  font-size: 11px;
+  color: #8a8a92;
+  letter-spacing: 0;
+}
+
 .grb-sidebar__header-actions {
   display: flex;
   gap: 4px;

@@ -3,31 +3,108 @@ import { describe, expect, it } from 'vitest'
 import {
   discussionsUrlFor,
   extractMrIid,
+  fetchGitLabDiscussions,
   normalizeDiscussions,
 } from '../../src/lib/fetchGitLabDiscussions'
 
 describe('discussionsUrlFor', () => {
-  it('derives discussions.json URL from a clean MR URL', () => {
+  it('derives a paginated discussions.json URL from a clean MR URL', () => {
     expect(
       discussionsUrlFor('https://gitlab.example.com/cp/instantbox_jobs/-/merge_requests/40'),
     ).toBe(
-      'https://gitlab.example.com/cp/instantbox_jobs/-/merge_requests/40/discussions.json',
+      'https://gitlab.example.com/cp/instantbox_jobs/-/merge_requests/40/discussions.json?per_page=100&page=1',
     )
   })
 
-  it('strips trailing path, query, and hash', () => {
+  it('strips trailing path and hash but adds pagination params', () => {
     expect(
       discussionsUrlFor(
         'https://gitlab.example.com/cp/instantbox_jobs/-/merge_requests/40/diffs?tab=foo#note_123',
       ),
     ).toBe(
-      'https://gitlab.example.com/cp/instantbox_jobs/-/merge_requests/40/discussions.json',
+      'https://gitlab.example.com/cp/instantbox_jobs/-/merge_requests/40/discussions.json?per_page=100&page=1',
     )
+  })
+
+  it('encodes the requested page number', () => {
+    expect(
+      discussionsUrlFor('https://gitlab.com/a/b/-/merge_requests/40', 3),
+    ).toBe('https://gitlab.com/a/b/-/merge_requests/40/discussions.json?per_page=100&page=3')
   })
 
   it('returns null for non-MR URLs', () => {
     expect(discussionsUrlFor('https://gitlab.com/foo/bar')).toBeNull()
     expect(discussionsUrlFor('not a url')).toBeNull()
+  })
+})
+
+describe('fetchGitLabDiscussions — pagination', () => {
+  const MR = 'https://gitlab.com/a/b/-/merge_requests/40'
+
+  function note(id: string, body: string) {
+    return { id, note: body, resolvable: true, resolved: false, author: { username: 'u' } }
+  }
+  function disc(id: string, body: string) {
+    return { id, notes: [note(id, body)] }
+  }
+  function jsonResponse(body: unknown, nextPage: string) {
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: (h: string) => (h === 'X-Next-Page' ? nextPage : null) },
+      json: async () => body,
+    } as unknown as Response
+  }
+
+  it('walks every page via X-Next-Page and concatenates discussions', async () => {
+    const pages = [
+      jsonResponse([disc('d1', 'first')], '2'),
+      jsonResponse([disc('d2', 'second')], '3'),
+      jsonResponse([disc('d3', 'rebase comment')], ''), // last page: empty next
+    ]
+    const calls: string[] = []
+    const fakeFetch = (async (url: string) => {
+      calls.push(url)
+      return pages.shift()!
+    }) as unknown as typeof fetch
+
+    const result = await fetchGitLabDiscussions(MR, fakeFetch)
+
+    expect(result.discussions.map((d) => d.discussionId)).toEqual(['d1', 'd2', 'd3'])
+    expect(calls).toEqual([
+      'https://gitlab.com/a/b/-/merge_requests/40/discussions.json?per_page=100&page=1',
+      'https://gitlab.com/a/b/-/merge_requests/40/discussions.json?per_page=100&page=2',
+      'https://gitlab.com/a/b/-/merge_requests/40/discussions.json?per_page=100&page=3',
+    ])
+  })
+
+  it('stops on a single page when X-Next-Page is empty', async () => {
+    let n = 0
+    const fakeFetch = (async () => {
+      n++
+      return jsonResponse([disc('d1', 'only')], '')
+    }) as unknown as typeof fetch
+
+    const result = await fetchGitLabDiscussions(MR, fakeFetch)
+    expect(n).toBe(1)
+    expect(result.discussions).toHaveLength(1)
+  })
+
+  it('falls back to length-based paging when X-Next-Page is absent', async () => {
+    const pages = [
+      { ok: true, status: 200, headers: { get: () => null }, json: async () => [disc('d1', 'a')] },
+      { ok: true, status: 200, headers: { get: () => null }, json: async () => [] },
+    ] as unknown as Response[]
+    const fakeFetch = (async () => pages.shift()!) as unknown as typeof fetch
+
+    const result = await fetchGitLabDiscussions(MR, fakeFetch)
+    expect(result.discussions.map((d) => d.discussionId)).toEqual(['d1'])
+  })
+
+  it('throws on a non-OK response', async () => {
+    const fakeFetch = (async () =>
+      ({ ok: false, status: 404, headers: { get: () => null }, json: async () => ({}) }) as unknown as Response) as unknown as typeof fetch
+    await expect(fetchGitLabDiscussions(MR, fakeFetch)).rejects.toThrow('HTTP 404')
   })
 })
 

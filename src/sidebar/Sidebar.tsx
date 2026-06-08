@@ -23,7 +23,21 @@ type DispatchUiState =
   | { kind: 'done'; at: number }
   | { kind: 'error'; message: string }
 
+/**
+ * Extension version, read from the loaded manifest so it always reflects what
+ * Chrome actually has installed (not the source tree). Guarded so the sidebar
+ * still renders under jsdom/tests where `chrome` is undefined.
+ */
+function extensionVersion(): string {
+  try {
+    return globalThis.chrome?.runtime?.getManifest?.().version ?? 'dev'
+  } catch {
+    return 'dev'
+  }
+}
+
 export function Sidebar({ mrTitle, loadState, onRefresh, onDispatch }: SidebarProps) {
+  const version = useMemo(extensionVersion, [])
   const [collapsed, setCollapsed] = useState(false)
   const [showResolved, setShowResolved] = useState(false)
   const [dispatchState, setDispatchState] = useState<Record<string, DispatchUiState>>({})
@@ -62,7 +76,12 @@ export function Sidebar({ mrTitle, loadState, onRefresh, onDispatch }: SidebarPr
   return (
     <aside className={`grb-sidebar ${collapsed ? 'grb-sidebar--collapsed' : ''}`}>
       <header className="grb-sidebar__header">
-        <strong className="grb-sidebar__title">AI Review Bridge</strong>
+        <strong className="grb-sidebar__title">
+          AI Review Bridge
+          <span className="grb-sidebar__version" title={`Loaded build v${version}`}>
+            v{version}
+          </span>
+        </strong>
         <div className="grb-sidebar__header-actions">
           {!collapsed && (
             <button

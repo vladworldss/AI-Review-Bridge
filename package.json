@@ -1,7 +1,7 @@
 {
   "name": "gitlab-ai-review-bridge",
   "displayName": "GitLab AI Review Bridge",
-  "version": "0.0.0",
+  "version": "0.2.0",
   "description": "Turn GitLab MR review discussions into AI-ready execution tasks.",
   "private": true,
   "scripts": {

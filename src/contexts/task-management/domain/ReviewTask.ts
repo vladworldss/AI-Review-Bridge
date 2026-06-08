@@ -145,6 +145,18 @@ export class ReviewTask {
     })
   }
 
+  /**
+   * Refresh the discussion context (e.g. new replies arrived in GitLab since
+   * the task was created). Only mutates if the context actually changed, so
+   * idempotent re-syncs don't bump lastUpdatedAt or emit churn.
+   */
+  refreshContext(context: CommentContext): boolean {
+    if (sameContext(this.snapshot.context, context)) return false
+    this.snapshot.context = context
+    this.snapshot.lastUpdatedAt = this.clock()
+    return true
+  }
+
   resolve(): void {
     this.transitionTo(TaskState.RESOLVED)
     const now = this.clock()
@@ -184,4 +196,16 @@ export class ReviewTask {
   private record(event: DomainEvent): void {
     this.events.push(event)
   }
+}
+
+function sameContext(a: CommentContext, b: CommentContext): boolean {
+  if (a.discussionThread.length !== b.discussionThread.length) return false
+  for (let i = 0; i < a.discussionThread.length; i++) {
+    const x = a.discussionThread[i]!
+    const y = b.discussionThread[i]!
+    if (x.author !== y.author || x.body !== y.body || x.createdAt !== y.createdAt) {
+      return false
+    }
+  }
+  return a.filePath === b.filePath && a.line === b.line && a.mrTitle === b.mrTitle
 }
