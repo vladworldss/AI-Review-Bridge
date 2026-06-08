@@ -2,7 +2,7 @@
 
 Chrome extension MVP that turns GitLab MR review discussions into AI-ready execution tasks for Claude Code, Codex, and VSCode agents.
 
-Stack: TypeScript + React + Plasmo, `chrome.storage.local` for state. See [docs/arch42/](docs/arch42/) for full architecture.
+Stack: TypeScript + React + Plasmo. State is held in an in-memory store rebuilt from GitLab on each sync (`chrome.storage.local` persistence is planned). See [docs/arch42/](docs/arch42/) for full architecture and [CLAUDE.md](CLAUDE.md) for agent working notes.
 
 ## Project structure
 

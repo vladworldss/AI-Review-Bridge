@@ -8,7 +8,8 @@ Frontend:
 - Plasmo
 
 Storage:
-- chrome.storage.local
+- in-memory store (`InMemoryReviewTaskStore`), rebuilt from GitLab per Sync
+- `chrome.storage.local` persistence — planned, not yet wired
 
 Future:
 - Go daemon
