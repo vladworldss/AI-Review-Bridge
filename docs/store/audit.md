@@ -160,7 +160,7 @@ AI-провайдерам).
   512×512 с альфа-скруглением, v0.2.4); остаются скриншоты для листинга —
   сценарии в [assets-checklist.md](assets-checklist.md).
 - **B-3 — закрыт.** Privacy Policy опубликована в репозитории:
-  `https://github.com/vladworldss/AI-Review-Bridge/blob/master/docs/store/privacy-policy.md`.
+  `https://github.com/vladworldss/AI-Review-Bridge/blob/main/docs/store/privacy-policy.md`.
 - **B-4 — закрыт.** `LICENSE` (MIT) добавлен.
 - Не-блокер: popup показывает статичную подсказку — single purpose не нарушен.
 

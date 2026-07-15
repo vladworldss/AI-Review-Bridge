@@ -45,7 +45,7 @@ https://github.com/vladworldss/AI-Review-Bridge
 ## Privacy Policy
 
 - [x] Policy публикуется в репозитории; URL вписан в policy и listing.md:
-  `https://github.com/vladworldss/AI-Review-Bridge/blob/master/docs/store/privacy-policy.md`
+  `https://github.com/vladworldss/AI-Review-Bridge/blob/main/docs/store/privacy-policy.md`
 - [ ] После push проверить, что URL открывается в приватном окне (репо публичный)
 - [ ] URL вписан в Store-форму
 
