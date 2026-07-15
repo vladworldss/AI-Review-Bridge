@@ -1,6 +1,6 @@
 # Terms of Service — GitLab AI Review Bridge
 
-_Last updated: 2026-07-15. Applies to extension version 0.2.2._
+_Last updated: 2026-07-15. Applies to extension version 0.2.4._
 
 ## 1. Acceptance
 

@@ -1,6 +1,6 @@
 # Privacy Policy — GitLab AI Review Bridge
 
-_Last updated: 2026-07-15. Applies to extension version 0.2.2._
+_Last updated: 2026-07-15. Applies to extension version 0.2.4._
 
 Public URL of this policy (use in the Chrome Web Store listing form):
 `https://github.com/vladworldss/AI-Review-Bridge/blob/main/docs/store/privacy-policy.md`
