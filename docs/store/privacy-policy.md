@@ -2,9 +2,8 @@
 
 _Last updated: 2026-07-15. Applies to extension version 0.2.2._
 
-> TODO: publish this document at a public URL and paste that URL into the
-> Chrome Web Store listing form.
-> Placeholder: `https://<your-github-username>.github.io/gitlab-ai-review-bridge/privacy-policy` (or the raw GitHub link to this file).
+Public URL of this policy (use in the Chrome Web Store listing form):
+`https://github.com/vladworldss/AI-Review-Bridge/blob/master/docs/store/privacy-policy.md`
 
 GitLab AI Review Bridge ("the extension") turns GitLab merge request review
 discussions into copy-ready AI task prompts. It runs entirely inside your
@@ -79,4 +78,4 @@ Changes will be published at the same public URL and reflected in the
 ## Contact
 
 Questions about this policy: `gerasimenkovladimirzz@gmail.com`
-(or open an issue in the project repository — TODO: add repository URL).
+(or open an issue at https://github.com/vladworldss/AI-Review-Bridge/issues).

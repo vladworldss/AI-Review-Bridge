@@ -89,7 +89,8 @@ Store-форме не фигурируют.
 
 ## Прочие поля формы
 
-- **Privacy policy URL:** TODO — см. [privacy-policy.md](privacy-policy.md)
+- **Privacy policy URL:**
+  `https://github.com/vladworldss/AI-Review-Bridge/blob/master/docs/store/privacy-policy.md`
 - **Data usage disclosure:** заполнять по таблице в [audit.md](audit.md) §3
   (ничего не собирается/не передаётся)
 - **Remote code:** No

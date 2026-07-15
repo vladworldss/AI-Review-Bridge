@@ -156,16 +156,17 @@ AI-провайдерам).
   хоста), а `*://*/*` осознанно отвергнут — он уничтожил бы минимальность
   permissions. Runtime-настройка хоста через `optional_host_permissions` +
   options page — в roadmap ([16-roadmap.md](../arch42/16-roadmap.md)).
-- **B-2 (branding).** Скриншотов для листинга нет (`assets/images/` пуст).
-  Исходник иконки `assets/icon.png` (512×512) есть; Plasmo генерирует
-  16/32/48/64/128 — требование к иконкам выполнено.
-- **B-3 (юр.).** Privacy Policy нужен публичный URL — файла и URL пока нет
-  (создаётся в Фазе 1, URL — TODO).
-- **B-4.** `LICENSE` в репозитории отсутствует (Фаза 2).
+- **B-2 (branding), частично закрыт.** Иконка готова (`assets/icon.png`
+  512×512 с альфа-скруглением, v0.2.4); остаются скриншоты для листинга —
+  сценарии в [assets-checklist.md](assets-checklist.md).
+- **B-3 — закрыт.** Privacy Policy опубликована в репозитории:
+  `https://github.com/vladworldss/AI-Review-Bridge/blob/master/docs/store/privacy-policy.md`.
+- **B-4 — закрыт.** `LICENSE` (MIT) добавлен.
 - Не-блокер: popup показывает статичную подсказку — single purpose не нарушен.
 
 ## 8. Вывод
 
 Технически расширение к ревью готово: MV3, ноль API-permissions, нет remote
-code, нет секретов, нет фоновых передач данных. Блокеры — организационные:
-решение по B-1, скриншоты, публичный URL политики, LICENSE.
+code, нет секретов, нет фоновых передач данных. B-1, B-3, B-4 закрыты;
+остаются скриншоты (B-2) и действия в кабинете Store — актуальный статус в
+[publish-checklist.md](publish-checklist.md).

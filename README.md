@@ -81,5 +81,4 @@ Tests are Vitest: domain/application in `tests/unit/`, parser/flow in
 
 ## License
 
-MIT (proposed — `LICENSE` file pending maintainer confirmation, see
-[docs/store/audit.md](docs/store/audit.md) §7).
+[MIT](LICENSE)

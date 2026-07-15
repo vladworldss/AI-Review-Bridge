@@ -55,4 +55,5 @@ acceptance.
 
 ## 8. Contact
 
-`gerasimenkovladimirzz@gmail.com` (TODO: add repository URL for issues).
+`gerasimenkovladimirzz@gmail.com` or
+https://github.com/vladworldss/AI-Review-Bridge/issues.
