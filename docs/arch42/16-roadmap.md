@@ -9,6 +9,10 @@
 
 ## Phase 2
 
+- Runtime-configurable GitLab host: user enters their self-hosted instance in
+  an options page; `optional_host_permissions` + `scripting` permission +
+  `chrome.scripting.registerContentScripts`. Replaces the build-time
+  `.env.local` mechanism (`.env.example`) for Store installs.
 - IDE integration
 - localhost bridge
 - prompt templates

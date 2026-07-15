@@ -13,10 +13,14 @@ import { Sidebar, type DispatchOutcome, type LoadState } from '../sidebar/Sideba
 
 import sidebarStyles from 'data-text:../sidebar/sidebar.css'
 
+// The second entry is substituted by Plasmo at build time from .env.local and
+// dropped from the array when the variable is unset (public/Store builds).
+// Whole-string "$VAR" form only — "$VAR/*" would survive as a literal when
+// unset and produce an invalid match pattern.
 export const config: PlasmoCSConfig = {
   matches: [
     'https://gitlab.com/*/-/merge_requests/*',
-    'https://gitlab.example.com/*/-/merge_requests/*',
+    '$PLASMO_EXTRA_GITLAB_MR_MATCH',
   ],
   run_at: 'document_idle',
 }

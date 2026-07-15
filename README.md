@@ -1,62 +1,85 @@
 # GitLab AI Review Bridge
 
-Chrome extension MVP that turns GitLab MR review discussions into AI-ready execution tasks for Claude Code, Codex, and VSCode agents.
+Turn GitLab merge request review discussions into copy-ready AI task prompts — one click per review thread, straight to your clipboard.
 
-Stack: TypeScript + React + Plasmo. State is held in an in-memory store rebuilt from GitLab on each sync (`chrome.storage.local` persistence is planned). See [docs/arch42/](docs/arch42/) for full architecture and [CLAUDE.md](CLAUDE.md) for agent working notes.
+![Sidebar on a GitLab MR page](docs/store/images/screenshot-sidebar.png)
+<!-- TODO: real screenshot; scenarios listed in docs/store/assets-checklist.md -->
 
-## Project structure
+## Install
 
-```
-chrome_ai_plug/
-├── src/
-│   ├── background/              service worker (messaging, lifecycle)
-│   ├── content/                 content scripts injected into gitlab.com
-│   ├── popup/                   browser-action popup (React)
-│   ├── options/                 settings page (React)
-│   ├── sidepanel/               Chrome Side Panel inbox (React)
-│   ├── components/              shared presentational React components
-│   ├── hooks/                   shared React hooks
-│   ├── lib/                     low-level utilities (clipboard, msg bus)
-│   ├── styles/                  global styles
-│   ├── contexts/                bounded contexts (DDD)
-│   │   ├── gitlab-integration/  parse MR · extract discussions · sync
-│   │   │   ├── domain/
-│   │   │   ├── application/
-│   │   │   ├── infrastructure/
-│   │   │   └── ui/
-│   │   ├── task-management/     ReviewTask aggregate · lifecycle
-│   │   │   ├── domain/
-│   │   │   ├── application/
-│   │   │   ├── infrastructure/
-│   │   │   └── ui/
-│   │   └── ai-dispatch/         PromptEnvelope · clipboard · agents
-│   │       ├── domain/
-│   │       ├── application/
-│   │       ├── infrastructure/
-│   │       └── ui/
-│   └── shared/
-│       ├── types/               cross-context TypeScript types
-│       ├── utils/               pure helpers
-│       ├── constants/           task states, storage keys, channels
-│       └── storage/             chrome.storage.local wrappers
-├── assets/
-│   ├── icons/                   16/32/48/128 px extension icons
-│   └── images/
-├── public/                      static files copied to build output
-├── tests/
-│   ├── unit/                    domain + application
-│   ├── integration/             storage, msg bus, parsers
-│   ├── e2e/                     Playwright against GitLab fixtures
-│   └── fixtures/                MR HTML snapshots
-├── docs/
-│   └── arch42/                  architecture (arch42 + DDD)
-└── .github/workflows/           CI: lint · typecheck · test · build
+**From Chrome Web Store** (recommended):
+<!-- TODO: replace with real listing URL after publication -->
+https://chromewebstore.google.com/detail/PLACEHOLDER
+
+**From source (developer mode):**
+
+```bash
+npm ci
+make build          # production build → build/chrome-mv3-prod
 ```
 
-## Layering rules
+Then open `chrome://extensions`, enable **Developer mode**, click **Load
+unpacked**, and select `build/chrome-mv3-prod/`. Open any GitLab merge request
+— the sidebar appears on the right.
 
-- `domain/` — pure logic, no browser/React/Plasmo imports.
-- `application/` — orchestrates domain via interfaces; no infra imports.
-- `infrastructure/` — adapters for `chrome.*` APIs, DOM, clipboard, network.
-- `ui/` — React components and hooks specific to one bounded context.
-- Cross-context calls go through `application/` use cases, never reach into another context's `domain/` or `infrastructure/`.
+## How it works
+
+- A single **content script** ([src/contents/gitlab-mr.tsx](src/contents/gitlab-mr.tsx))
+  runs on GitLab merge request pages and mounts a React **sidebar**
+  ([src/sidebar/](src/sidebar/)). There is no background service worker.
+- Discussions are fetched from the MR's own `discussions.json` endpoint on the
+  same GitLab host, using your existing session
+  ([src/lib/fetchGitLabDiscussions.ts](src/lib/fetchGitLabDiscussions.ts)).
+- Domain logic lives in three DDD bounded contexts under
+  [src/contexts/](src/contexts/): `gitlab-integration` (parse/extract),
+  `task-management` (ReviewTask aggregate and lifecycle), `ai-dispatch`
+  (PromptEnvelope + clipboard).
+- Tasks are kept in an **in-memory store** rebuilt on each sync
+  ([src/lib/reviewTaskMapper.ts](src/lib/reviewTaskMapper.ts)) — nothing is
+  persisted.
+- "Send to AI" renders the thread (comment, replies, file:line, diff hunk) as
+  a text prompt and **copies it to the clipboard**
+  ([src/lib/dispatchFromStore.ts](src/lib/dispatchFromStore.ts)). The
+  extension itself never calls any AI provider.
+
+Layering rules and the full architecture are documented in
+[docs/arch42/](docs/arch42/) and [CLAUDE.md](CLAUDE.md).
+
+## Permissions
+
+The extension requests **no Chrome API permissions** — only host access
+(see [docs/store/audit.md](docs/store/audit.md) for the full audit):
+
+| Host permission | Why |
+|---|---|
+| `https://gitlab.com/*` | Show the sidebar on MR pages and read that MR's discussions from GitLab itself |
+
+**Self-hosted GitLab:** copy [.env.example](.env.example) to `.env.local`, set
+your instance's URL patterns, and `make build` — the host is substituted into
+the manifest at build time and never enters the repository or the Store build.
+(Runtime host configuration via the options UI is on the roadmap.)
+
+## Privacy
+
+No data leaves your browser: the only network request goes to the GitLab host
+you are already viewing, there is no analytics, no AI provider calls, and no
+storage. Full policy: [docs/store/privacy-policy.md](docs/store/privacy-policy.md)
+· terms: [docs/store/terms.md](docs/store/terms.md).
+
+## Development
+
+```bash
+make dev            # Plasmo dev server (watch + HMR)
+make check          # typecheck + tests — run before committing
+make build          # production build
+./scripts/build-store-zip.sh   # Chrome Web Store zip (clean, no dev files)
+```
+
+Tests are Vitest: domain/application in `tests/unit/`, parser/flow in
+`tests/integration/`. Store submission artifacts live in
+[docs/store/](docs/store/).
+
+## License
+
+MIT (proposed — `LICENSE` file pending maintainer confirmation, see
+[docs/store/audit.md](docs/store/audit.md) §7).

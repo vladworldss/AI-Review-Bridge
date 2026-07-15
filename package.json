@@ -1,7 +1,7 @@
 {
   "name": "gitlab-ai-review-bridge",
   "displayName": "GitLab AI Review Bridge",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Turn GitLab MR review discussions into AI-ready execution tasks.",
   "private": true,
   "scripts": {
@@ -30,7 +30,7 @@
   "manifest": {
     "host_permissions": [
       "https://gitlab.com/*",
-      "https://gitlab.example.com/*"
+      "$PLASMO_EXTRA_GITLAB_HOST_PERMISSION"
     ]
   }
 }

@@ -25,8 +25,11 @@ vendor/
 go.work
 go.work.sum
 
-# env file
+# env files (keep the committed template visible)
 .env
+.env.local
+.env.*.local
+!.env.example
 
 # Editor/IDE
 .idea/
@@ -44,8 +47,9 @@ config.local.toml
 # local cache
 .cache/
 
-# scripts for local tests
-scripts/
+# scripts for local tests (but keep checked-in release tooling)
+scripts/*
+!scripts/build-store-zip.sh
 node_modules/
 CLAUDE.md
 
@@ -53,3 +57,4 @@ CLAUDE.md
 .plasmo/
 .parcel-cache/
 build/
+dist/
