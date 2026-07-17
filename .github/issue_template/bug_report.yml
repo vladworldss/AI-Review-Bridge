@@ -1,0 +1,12 @@
+name: Bug Report
+
+body:
+  - type: textarea
+    attributes:
+      label: Expected Behavior
+  - type: textarea
+    attributes:
+      label: Actual Behavior
+  - type: textarea
+    attributes:
+      label: Steps To Reproduce

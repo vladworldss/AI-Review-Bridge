@@ -1,0 +1,12 @@
+name: Feature Request
+
+body:
+  - type: textarea
+    attributes:
+      label: Problem
+  - type: textarea
+    attributes:
+      label: Proposed Solution
+  - type: textarea
+    attributes:
+      label: Acceptance Criteria
