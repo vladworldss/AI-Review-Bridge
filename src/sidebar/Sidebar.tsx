@@ -96,7 +96,7 @@ export function Sidebar({ mrTitle, loadState, onRefresh, onDispatch }: SidebarPr
           )}
           <button
             type="button"
-            className="grb-sidebar__icon-btn"
+            className="grb-sidebar__icon-btn grb-sidebar__icon-btn--collapse"
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             onClick={() => setCollapsed((c) => !c)}
           >
