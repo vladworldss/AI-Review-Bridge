@@ -10,6 +10,8 @@
   font-size: 13px;
   line-height: 1.4;
   border-left: 1px solid #2e2e33;
+  border-radius: 12px 0 0 12px;
+  overflow: hidden;
   box-shadow: -4px 0 12px rgba(0, 0, 0, 0.25);
   z-index: 2147483000;
   display: flex;
@@ -19,6 +21,9 @@
 
 .grb-sidebar--collapsed {
   width: 36px;
+  border: 1px solid #E24329;
+  border-right: none;
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.25), 0 0 8px rgba(226, 67, 41, 0.45);
 }
 
 .grb-sidebar__header {
@@ -70,6 +75,15 @@
 
 .grb-sidebar__icon-btn:hover {
   background: #2a2a30;
+}
+
+.grb-sidebar__icon-btn--collapse {
+  color: #E24329;
+  border-color: #E24329;
+}
+
+.grb-sidebar__icon-btn--collapse:hover {
+  background: rgba(226, 67, 41, 0.15);
 }
 
 .grb-sidebar__body {
