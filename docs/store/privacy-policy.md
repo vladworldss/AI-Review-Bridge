@@ -1,6 +1,6 @@
 # Privacy Policy — GitLab AI Review Bridge
 
-_Last updated: 2026-07-15. Applies to extension version 0.2.4._
+_Last updated: 2026-07-29. Applies to extension version 0.3.0._
 
 Public URL of this policy (use in the Chrome Web Store listing form):
 `https://github.com/vladworldss/AI-Review-Bridge/blob/main/docs/store/privacy-policy.md`
@@ -12,9 +12,8 @@ on its source code (references below point to files in the public repository).
 
 ## What data the extension processes
 
-When you open a merge request page on `gitlab.com` (or, in self-built local
-versions only, a self-hosted GitLab instance you configure at build time),
-the extension:
+When you open a merge request page on `gitlab.com` or on any self-hosted
+GitLab instance, the extension:
 
 - Fetches that merge request's review discussions from **the same GitLab host
   you are already viewing**, via the endpoint
@@ -27,6 +26,20 @@ the extension:
 
 The fetched data includes discussion IDs, comment authors' GitLab usernames,
 comment text, timestamps, and file/line references.
+
+## Why the extension asks for access to all sites
+
+Chrome shows a broad "read and change all your data on all websites" warning
+at install because the extension requests `https://*/*`. GitLab is most often
+self-hosted on private company domains (`git.acme.internal`, `code.corp.io`),
+which cannot be listed in the manifest ahead of time, and Chrome does not
+allow a pattern like `https://gitlab.*/*`.
+
+In practice the extension is far narrower than that permission suggests: it
+only activates on URLs matching GitLab's merge-request shape
+(`/-/merge_requests/<number>`), and on any other page it mounts nothing and
+makes no network request. It never sends data anywhere regardless of the site
+you are on.
 
 ## Where data is sent
 

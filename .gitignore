@@ -36,6 +36,7 @@ go.work.sum
 .vscode/
 .DS_Store
 .claude/
+.tmp/
 
 vendor.protobuf
 bin/

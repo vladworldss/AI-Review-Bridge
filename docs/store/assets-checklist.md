@@ -33,9 +33,13 @@
 
 ## Promo tiles (опционально)
 
-- [ ] Small promo tile **440×280** PNG/JPEG: иконка + слоган
-  «MR comments → AI prompts» на однотонном фоне
-- [ ] Marquee **1400×560** (нужен только для фичеринга — можно пропустить)
+- [x] Small promo tile **440×280** PNG/JPEG: иконка + слоган
+  «MR comments → AI prompts» на однотонном фоне —
+  `docs/store/images/promo-440x280.png` (генератор:
+  `swift scripts/store-promo.swift assets/icon.png <out>`)
+- [x] Marquee **1400×560** (нужен только для фичеринга) —
+  `docs/store/images/promo-1400x560.png` (генератор:
+  `swift scripts/store-promo.swift assets/icon.png <out> 1B1F24 FFFFFF F26522 1400x560`)
 
 ## Общие требования
 

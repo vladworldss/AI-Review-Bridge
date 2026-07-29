@@ -15,14 +15,14 @@
 | `name` | `GitLab AI Review Bridge` | из `package.json.displayName` |
 | `version` | `0.2.2` | совпадает с `package.json` |
 | `permissions` | **отсутствует** (пусто) | расширение не запрашивает ни одного API-permission |
-| `host_permissions` | `https://gitlab.com/*` (+ опциональный self-hosted хост из `.env.local`, в Store-сборку не входит) | задано в [package.json:31-34](../../package.json); env-подстановка Plasmo, см. [.env.example](../../.env.example) |
+| `host_permissions` | `https://*/*` (с 0.3.0) | задано в [package.json](../../package.json); широкий хост нужен для self-hosted GitLab, см. §2 и §7 (B-1) |
 | `optional_permissions` | отсутствуют | |
 | `content_security_policy` | отсутствует (дефолт MV3) | дефолтный CSP MV3 запрещает remote code — соответствует |
 | `background.service_worker` | **отсутствует** | фонового скрипта нет вообще; `src/background/` — пустой `.gitkeep` |
 | `default_locale` | отсутствует | локализации нет, см. §5 |
-| `content_scripts` | 1 скрипт, `matches: */-/merge_requests/*` на двух хостах, `run_at: document_idle` | объявлен в [src/contents/gitlab-mr.tsx:16-22](../../src/contents/gitlab-mr.tsx#L16-L22) |
+| `content_scripts` | 1 скрипт, `matches: https://*/*/-/merge_requests/*`, `run_at: document_idle` | объявлен в [src/contents/gitlab-mr.tsx](../../src/contents/gitlab-mr.tsx) |
 | `action.default_popup` | `popup.html` | статическая заглушка [src/popup.tsx](../../src/popup.tsx) |
-| `web_accessible_resources` | 1 CSS-файл, только для тех же двух хостов | сгенерировано Plasmo для стилей сайдбара |
+| `web_accessible_resources` | 1 CSS-файл, для того же match-паттерна | сгенерировано Plasmo для стилей сайдбара |
 
 ## 2. Permissions → использование → обоснование
 
@@ -36,8 +36,14 @@ permission не требует. Буфер обмена используется
 
 | Permission | Где используется в коде | Обоснование для формы Store (одной фразой) |
 |---|---|---|
-| `host_permissions: https://gitlab.com/*` | content script рендерит сайдбар на страницах MR ([gitlab-mr.tsx:16-22](../../src/contents/gitlab-mr.tsx#L16-L22)); fetch `discussions.json` с того же хоста ([fetchGitLabDiscussions.ts:107-111](../../src/lib/fetchGitLabDiscussions.ts#L107-L111)); отдача CSS через `web_accessible_resources` | «Needed to display the review-task sidebar on GitLab merge request pages and read that MR's discussion data from GitLab itself.» |
-| (локальные сборки) `$PLASMO_EXTRA_GITLAB_HOST_PERMISSION` | те же два места — второй элемент массивов `host_permissions`/`matches`; при незаданной переменной Plasmo выбрасывает его из манифеста | В Store-форме не фигурирует: публичная сборка содержит только `gitlab.com` |
+| `host_permissions: https://*/*` | content script рендерит сайдбар на страницах MR ([gitlab-mr.tsx](../../src/contents/gitlab-mr.tsx)); fetch `discussions.json` с того же хоста ([fetchGitLabDiscussions.ts:107-111](../../src/lib/fetchGitLabDiscussions.ts#L107-L111)); отдача CSS через `web_accessible_resources` | «GitLab is self-hosted on private corporate domains that cannot be enumerated in the manifest. The script only matches the GitLab-specific `/-/merge_requests/` URL shape and mounts only on a real MR page; elsewhere it does nothing and issues no request.» |
+| `storage` | хранение состояния задач по MR в `chrome.storage.local` | «Remembers per-MR task state locally. Never leaves the browser.» |
+
+Почему широкий хост, а не список: Chrome допускает wildcard только в начале
+хоста, поэтому паттерн вида `https://gitlab.*/*` невозможен, а корпоративные
+инстансы носят произвольные имена (`git.acme.internal`, `code.corp.io`).
+Сужение обеспечивается не хостом, а формой пути и guard'ом в
+`getRootContainer` (требуется числовой id MR).
 
 Замечание: `matches` в `content_scripts` сами по себе дают инъекцию; отдельный
 `host_permissions` нужен Plasmo для `web_accessible_resources.matches` и на
@@ -147,18 +153,21 @@ AI-провайдерам).
 
 ## 7. Найденные блокеры / риски ревью Store
 
-- **B-1 — закрыт.** Ранее в манифест был зашит приватный self-hosted инстанс.
-  Теперь второй хост задаётся только через `.env.local` (гитигнорен) и
-  подставляется Plasmo при локальной сборке; при незаданных переменных
-  соответствующие элементы `host_permissions`/`matches` выбрасываются, и
-  Store-сборка содержит единственный хост `gitlab.com`. Wildcard-паттерн вида
-  `https://gitlab.*/*` невозможен (Chrome разрешает wildcard только в начале
-  хоста), а `*://*/*` осознанно отвергнут — он уничтожил бы минимальность
-  permissions. Runtime-настройка хоста через `optional_host_permissions` +
-  options page — в roadmap ([16-roadmap.md](../arch42/16-roadmap.md)).
-- **B-2 (branding), частично закрыт.** Иконка готова (`assets/icon.png`
-  512×512 с альфа-скруглением, v0.2.4); остаются скриншоты для листинга —
-  сценарии в [assets-checklist.md](assets-checklist.md).
+- **B-1 — закрыт иначе, чем планировалось (v0.3.0).** Ранее в манифест был
+  зашит приватный self-hosted инстанс, затем хост выносился в `.env.local`, и
+  Store-сборка поддерживала только `gitlab.com`. Это оставляло корпоративных
+  пользователей — основную аудиторию — без работающего расширения. С 0.3.0
+  манифест объявляет `host_permissions: https://*/*`, а content script
+  матчится по `https://*/*/-/merge_requests/*`; env-подстановка удалена.
+  **Цена решения, которую надо учитывать при ревью:** Chrome покажет при
+  установке «Read and change all your data on all websites», а Store
+  потребует обоснование broad host permissions — текст готов в
+  [listing.md](listing.md) и §2 выше. Сужение достигается формой пути и
+  guard'ом на числовой id MR, а не списком хостов.
+- **B-2 (branding) — закрыт (v0.3.0).** Иконка готова (`assets/icon.png`
+  512×512 с альфа-скруглением, v0.2.4), скриншоты 1280×800 (6 шт.) и промо-
+  плитки 440×280 / 1400×560 лежат в `docs/store/images/` —
+  см. [assets-checklist.md](assets-checklist.md).
 - **B-3 — закрыт.** Privacy Policy опубликована в репозитории:
   `https://github.com/vladworldss/AI-Review-Bridge/blob/main/docs/store/privacy-policy.md`.
 - **B-4 — закрыт.** `LICENSE` (MIT) добавлен.

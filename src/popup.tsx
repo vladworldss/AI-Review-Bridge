@@ -11,7 +11,8 @@ function Popup() {
     >
       <h1 style={{ fontSize: 14, margin: '0 0 6px' }}>AI Review Bridge</h1>
       <p style={{ margin: 0, color: '#555' }}>
-        Open a GitLab MR to see the sidebar.
+        Open a merge request on gitlab.com or any self-hosted GitLab to see the
+        sidebar.
       </p>
     </main>
   )

@@ -52,15 +52,20 @@ if grep -rInE '(^|[^a-zA-Z-])sk-[a-zA-Z0-9]{8,}|api_key\s*=|Bearer ' "$BUILD_DIR
   grep -rInE '(^|[^a-zA-Z-])sk-[a-zA-Z0-9]{8,}|api_key\s*=|Bearer ' "$BUILD_DIR" >&2
   exit 1
 fi
-# Store package must contain exactly the public host — no self-hosted
-# instances and no unsubstituted "$PLASMO_*" literals.
+# Since 0.3.0 the Store package ships a broad host pattern so that corporate
+# self-hosted GitLab instances work without setup. Assert exactly the intended
+# patterns: no named private instance may leak back in, and no unsubstituted
+# "$PLASMO_*" literal may survive.
 node - "$BUILD_DIR" <<'EOF'
 const m = require(`${process.argv[2]}/manifest.json`)
+const ALLOWED_HOSTS = new Set(['https://*/*'])
+const ALLOWED_MATCHES = new Set(['https://*/*/-/merge_requests/*'])
 const hosts = m.host_permissions ?? []
 const matches = (m.content_scripts ?? []).flatMap((cs) => cs.matches ?? [])
-const bad = [...hosts, ...matches].filter(
-  (p) => p.includes('$') || !p.startsWith('https://gitlab.com/'),
-)
+const bad = [
+  ...hosts.filter((p) => !ALLOWED_HOSTS.has(p)),
+  ...matches.filter((p) => !ALLOWED_MATCHES.has(p)),
+]
 if (bad.length) {
   console.error('ERROR: unexpected host patterns in Store manifest:', bad)
   process.exit(1)
