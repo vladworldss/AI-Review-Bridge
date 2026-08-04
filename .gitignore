@@ -45,6 +45,9 @@ bin/
 *.secret
 config.local.toml
 
+# personal scratch notes — kept local, not published with the repo
+docs/todo.md
+
 # local cache
 .cache/
 
