@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import {
+  DEFAULT_PREFERENCES,
   type Preferences,
   chromePreferenceStorage,
   readPreferences,
@@ -11,16 +12,47 @@ import {
 const FONT_STACK =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
 
+const WIDTH = 240
+
+/**
+ * Chrome measures the popup window from the document's layout at first paint.
+ * This popup reads its state asynchronously from storage, so the first paint
+ * happens before the value is known — if the document had no intrinsic size of
+ * its own, Chrome could latch onto a collapsed window and the popup would look
+ * like it never opened (until a reload changed the timing).
+ *
+ * Pinning html/body to the final width, and keeping the layout identical in the
+ * loading state, makes the window size independent of when storage resolves.
+ */
+function useStablePopupSize(): void {
+  useEffect(() => {
+    const { documentElement: html, body } = document
+    for (const el of [html, body]) {
+      el.style.width = `${WIDTH}px`
+      el.style.margin = '0'
+      el.style.padding = '0'
+    }
+    body.style.overflow = 'hidden'
+  }, [])
+}
+
 function Popup() {
   const storage = useMemo(() => chromePreferenceStorage(), [])
-  // null while storage resolves, so the switch never flashes the wrong position.
-  const [prefs, setPrefs] = useState<Preferences | null>(null)
+  useStablePopupSize()
+
+  // Seeded with the defaults rather than null so the very first paint already
+  // has the real layout. `settled` only drives the subtle "not confirmed yet"
+  // styling — it must not change the box model, or the window would resize.
+  const [prefs, setPrefs] = useState<Preferences>(DEFAULT_PREFERENCES)
+  const [settled, setSettled] = useState(false)
 
   useEffect(() => {
     let cancelled = false
 
     void readPreferences(storage).then((p) => {
-      if (!cancelled) setPrefs(p)
+      if (cancelled) return
+      setPrefs(p)
+      setSettled(true)
     })
 
     // Another popup window (or the sidebar) may change this while we're open.
@@ -38,22 +70,20 @@ function Popup() {
     (next: boolean) => {
       // Optimistic: the storage round-trip is ~1ms but the click should feel
       // instant. The onChanged subscription re-confirms the same value.
-      setPrefs((current) => ({
-        enabled: next,
-        collapsed: current?.collapsed ?? false,
-      }))
+      setPrefs((current) => ({ ...current, enabled: next }))
+      setSettled(true)
       void writePreferences(storage, { enabled: next })
     },
     [storage],
   )
 
-  const loading = prefs === null
-  const enabled = prefs?.enabled ?? true
+  const enabled = prefs.enabled
 
   return (
     <main
       style={{
-        width: 240,
+        boxSizing: 'border-box',
+        width: WIDTH,
         padding: 12,
         fontFamily: FONT_STACK,
         fontSize: 13,
@@ -66,20 +96,20 @@ function Popup() {
           display: 'flex',
           alignItems: 'center',
           gap: 8,
-          cursor: loading ? 'default' : 'pointer',
-          opacity: loading ? 0.6 : 1,
+          cursor: 'pointer',
+          // Opacity only — no layout change between loading and settled.
+          opacity: settled ? 1 : 0.55,
         }}
       >
         <input
           type="checkbox"
           checked={enabled}
-          disabled={loading}
           onChange={(e) => toggle(e.target.checked)}
           style={{ margin: 0 }}
         />
         <span style={{ flex: 1 }}>Sidebar</span>
         <strong style={{ color: enabled ? '#1f7a3d' : '#8b8b8b' }}>
-          {loading ? '…' : enabled ? 'On' : 'Off'}
+          {enabled ? 'On' : 'Off'}
         </strong>
       </label>
 
