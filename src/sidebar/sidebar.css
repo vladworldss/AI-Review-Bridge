@@ -270,6 +270,78 @@
   color: #8e8e95;
 }
 
+/* Clickable variant: strip the button chrome, keep it looking like the label. */
+.grb-task__replies--toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 11.5px;
+  color: #8e8e95;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.grb-task__replies--toggle:hover {
+  color: #c9c9d1;
+}
+
+.grb-task__replies--toggle:focus-visible {
+  outline: 1px solid #f26522;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.grb-task__replies-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  border: 1px solid #4a4a52;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1;
+  color: #c9c9d1;
+}
+
+.grb-task__replies--toggle:hover .grb-task__replies-caret {
+  border-color: #f26522;
+  color: #f26522;
+}
+
+.grb-task__thread {
+  margin: 2px 0 0;
+  padding: 0 0 0 9px;
+  list-style: none;
+  border-left: 1px solid #3a3a42;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.grb-task__reply {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.grb-task__reply-author {
+  font-size: 11px;
+  color: #d98b5f;
+}
+
+.grb-task__reply-body {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #cfcfd6;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
 .grb-task__actions {
   display: flex;
   align-items: center;

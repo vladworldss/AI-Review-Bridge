@@ -188,8 +188,12 @@ function TaskItem({
   dispatchState: DispatchUiState
   onDispatch: () => void
 }) {
+  const [repliesOpen, setRepliesOpen] = useState(false)
+
   const head = task.context.discussionThread.at(0)
-  const replyCount = Math.max(0, task.context.discussionThread.length - 1)
+  // Replies are already in the snapshot — expanding needs no extra fetch.
+  const replies = task.context.discussionThread.slice(1)
+  const replyCount = replies.length
   const reviewer = head?.author ?? 'unknown'
   const preview = head?.body?.trim() || '(empty comment)'
 
@@ -235,9 +239,31 @@ function TaskItem({
 
       <div className="grb-task__preview">{preview}</div>
       {replyCount > 0 && (
-        <div className="grb-task__replies">
-          +{replyCount} {replyCount === 1 ? 'reply' : 'replies'}
-        </div>
+        <>
+          <button
+            type="button"
+            className="grb-task__replies grb-task__replies--toggle"
+            aria-expanded={repliesOpen}
+            onClick={() => setRepliesOpen((open) => !open)}
+          >
+            <span className="grb-task__replies-caret" aria-hidden>
+              {repliesOpen ? '−' : '+'}
+            </span>
+            {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
+          </button>
+          {repliesOpen && (
+            <ol className="grb-task__thread">
+              {replies.map((reply, i) => (
+                <li className="grb-task__reply" key={`${reply.author}-${i}`}>
+                  <span className="grb-task__reply-author">@{reply.author}</span>
+                  <span className="grb-task__reply-body">
+                    {reply.body.trim() || '(empty comment)'}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </>
       )}
 
       <div className="grb-task__actions">
