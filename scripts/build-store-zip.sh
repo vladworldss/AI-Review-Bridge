@@ -52,22 +52,62 @@ if grep -rInE '(^|[^a-zA-Z-])sk-[a-zA-Z0-9]{8,}|api_key\s*=|Bearer ' "$BUILD_DIR
   grep -rInE '(^|[^a-zA-Z-])sk-[a-zA-Z0-9]{8,}|api_key\s*=|Bearer ' "$BUILD_DIR" >&2
   exit 1
 fi
-# Since 0.3.0 the Store package ships a broad host pattern so that corporate
-# self-hosted GitLab instances work without setup. Assert exactly the intended
-# patterns: no named private instance may leak back in, and no unsubstituted
-# "$PLASMO_*" literal may survive.
+# Since 0.4.0 the package declares NO host permissions: the only network call is
+# a same-origin fetch from the content script, which needs no host grant, and the
+# manifest ships no web_accessible_resources (pruned below). Reach is the content
+# script's match pattern alone.
+#
+# Assertions are set-EQUALITY, not filtering: the previous filter-only guard let
+# an absent key pass silently, so it could not detect a regression in either
+# direction. Every key below must match exactly.
 node - "$BUILD_DIR" <<'EOF'
 const m = require(`${process.argv[2]}/manifest.json`)
-const ALLOWED_HOSTS = new Set(['https://*/*'])
-const ALLOWED_MATCHES = new Set(['https://*/*/-/merge_requests/*'])
+
+const EXPECTED_PERMISSIONS = ['storage']
+const EXPECTED_MATCHES = ['https://*/*/-/merge_requests/*']
+
+const errors = []
+const eq = (actual, expected) =>
+  actual.length === expected.length &&
+  [...actual].sort().every((v, i) => v === [...expected].sort()[i])
+
+// 1. No host permissions at all. This is the Store-review-facing assertion.
 const hosts = m.host_permissions ?? []
+if (hosts.length > 0) {
+  errors.push(`host_permissions must be absent, found: ${JSON.stringify(hosts)}`)
+}
+if ((m.optional_host_permissions ?? []).length > 0) {
+  errors.push(
+    `optional_host_permissions must be absent, found: ${JSON.stringify(m.optional_host_permissions)}`,
+  )
+}
+
+// 2. Exactly the one API permission we use (storage, for the on/off preference).
+const permissions = m.permissions ?? []
+if (!eq(permissions, EXPECTED_PERMISSIONS)) {
+  errors.push(
+    `permissions must be ${JSON.stringify(EXPECTED_PERMISSIONS)}, found: ${JSON.stringify(permissions)}`,
+  )
+}
+
+// 3. Exactly the GitLab MR match pattern — catches both a widened pattern and a
+//    private instance leaking back in.
 const matches = (m.content_scripts ?? []).flatMap((cs) => cs.matches ?? [])
-const bad = [
-  ...hosts.filter((p) => !ALLOWED_HOSTS.has(p)),
-  ...matches.filter((p) => !ALLOWED_MATCHES.has(p)),
-]
-if (bad.length) {
-  console.error('ERROR: unexpected host patterns in Store manifest:', bad)
+if (!eq(matches, EXPECTED_MATCHES)) {
+  errors.push(
+    `content_scripts matches must be ${JSON.stringify(EXPECTED_MATCHES)}, found: ${JSON.stringify(matches)}`,
+  )
+}
+
+// 4. No unsubstituted build-time env literal survived anywhere in the manifest.
+const raw = JSON.stringify(m)
+if (raw.includes('PLASMO_') || raw.includes('$')) {
+  errors.push('manifest contains an unsubstituted "$"/"PLASMO_" literal')
+}
+
+if (errors.length) {
+  console.error('ERROR: Store manifest assertions failed:')
+  for (const e of errors) console.error(`  - ${e}`)
   process.exit(1)
 }
 EOF
@@ -77,7 +117,8 @@ if grep -rInE 'importScripts\(|https?://[^"'"'"' ]+\.js' "$BUILD_DIR" --include=
   grep -rInE 'importScripts\(|https?://[^"'"'"' ]+\.js' "$BUILD_DIR" --include='*.js' --include='*.html' >&2
   exit 1
 fi
-echo "    manifest_version=3, no secrets, no remote code — OK"
+echo "    manifest_version=3, no host_permissions, permissions=[storage],"
+echo "    match pattern exact, no secrets, no remote code — OK"
 
 # Plasmo declares the content-script CSS in web_accessible_resources even
 # when it is inlined via `data-text:` and never emitted. Prune WAR entries

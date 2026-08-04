@@ -72,14 +72,18 @@ discussion to the clipboard as an AI-ready prompt.
 
 ## Permission justifications (для формы ревью)
 
-Перенесено из [audit.md](audit.md) §2. API-permissions не запрашиваются.
+Перенесено из [audit.md](audit.md) §2. Из host-прав не запрашивается **ничего**;
+из API-permissions — только `storage`.
 
 | Permission | Justification |
 |---|---|
-| Host: `https://*/*` | GitLab is self-hosted by most companies on their own private domains, which are unknowable ahead of time, so the extension cannot enumerate them in the manifest. The content script only matches the GitLab-specific merge-request URL shape (`/-/merge_requests/`) and mounts only when the page is a real MR; on every other site it does nothing and makes no network request. The only request it ever makes is to `/-/merge_requests/<id>/discussions.json` **on the host you are already viewing**, using your existing session. No data is sent anywhere. |
+| Content script match: `https://*/*/-/merge_requests/*` | The extension declares **no host permissions at all**, so it cannot make cross-origin requests or read any other tab. This is only a content-script match pattern. GitLab is self-hosted by most companies on their own private domains, which are unknowable ahead of time, and Chrome permits a wildcard only at the *start* of a host — so a pattern like `https://gitlab.*/*` is impossible and corporate hostnames cannot be enumerated. The script matches the GitLab-specific merge-request URL shape (`/-/merge_requests/`) and mounts only when the page is a real MR with a numeric id; on every other page it renders nothing and makes no network request. The only request it ever makes is to `/-/merge_requests/<id>/discussions.json` **same-origin, on the host you are already viewing**, using your existing session. No data is sent anywhere. |
+| `storage` | Stores the user's own UI preference — two booleans: whether the sidebar is on, and whether it is collapsed. Local only, never transmitted, and nothing is written until the user actually toggles it. |
 
-Широкий хост — осознанный выбор ради работы на корпоративных GitLab
+Широкий `matches` — осознанный выбор ради работы на корпоративных GitLab
 без ручной настройки; см. обоснование в [audit.md](audit.md) §2 и §7 (B-1).
+Важно при заполнении формы: предупреждение об «access to all sites» остаётся,
+поскольку его даёт `matches`, а не host-грант.
 
 ## Категория и язык
 

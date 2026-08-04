@@ -15,6 +15,9 @@ export type SidebarProps = {
   loadState: LoadState
   onRefresh: () => void
   onDispatch: DispatchHandler
+  /** Controlled + persisted: the rail survives reloads and SPA navigation. */
+  collapsed: boolean
+  onCollapsedChange: (next: boolean) => void
 }
 
 type DispatchUiState =
@@ -36,9 +39,16 @@ function extensionVersion(): string {
   }
 }
 
-export function Sidebar({ mrTitle, loadState, onRefresh, onDispatch }: SidebarProps) {
+export function Sidebar({
+  mrTitle,
+  loadState,
+  onRefresh,
+  onDispatch,
+  collapsed,
+  onCollapsedChange,
+}: SidebarProps) {
   const version = useMemo(extensionVersion, [])
-  const [collapsed, setCollapsed] = useState(false)
+  // `showResolved` stays local — it's a transient view filter, not a preference.
   const [showResolved, setShowResolved] = useState(false)
   const [dispatchState, setDispatchState] = useState<Record<string, DispatchUiState>>({})
 
@@ -98,7 +108,7 @@ export function Sidebar({ mrTitle, loadState, onRefresh, onDispatch }: SidebarPr
             type="button"
             className="grb-sidebar__icon-btn grb-sidebar__icon-btn--collapse"
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            onClick={() => setCollapsed((c) => !c)}
+            onClick={() => onCollapsedChange(!collapsed)}
           >
             {collapsed ? '«' : '»'}
           </button>
