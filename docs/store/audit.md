@@ -1,53 +1,65 @@
 # Chrome Web Store — аудит расширения (Фаза 0)
 
-Дата аудита: 2026-07-15. Версия: `0.2.2` ([package.json:4](../../package.json)).
+Дата аудита: 2026-08-04. Версия: `0.4.0` ([package.json:4](../../package.json)).
 Аудит проведён по исходникам `src/` и по фактической prod-сборке
 `build/chrome-mv3-prod/manifest.json` (Plasmo генерирует манифест из
 `package.json`, ключ `manifest` — [package.json:30-35](../../package.json)).
 
 ## 1. Манифест (fact sheet)
 
-Источник: `build/chrome-mv3-prod/manifest.json` (сборка 0.2.2).
+Источник: `build/chrome-mv3-prod/manifest.json` (сборка 0.4.0).
 
 | Поле | Значение | Примечание |
 |---|---|---|
 | `manifest_version` | **3** | ✅ требование Store выполнено |
 | `name` | `GitLab AI Review Bridge` | из `package.json.displayName` |
-| `version` | `0.2.2` | совпадает с `package.json` |
-| `permissions` | **отсутствует** (пусто) | расширение не запрашивает ни одного API-permission |
-| `host_permissions` | `https://*/*` (с 0.3.0) | задано в [package.json](../../package.json); широкий хост нужен для self-hosted GitLab, см. §2 и §7 (B-1) |
+| `version` | `0.4.0` | совпадает с `package.json` |
+| `permissions` | `storage` (с 0.4.0) | единственный API-permission; хранит настройку вкл/выкл сайдбара, см. §2 |
+| `host_permissions` | **отсутствует** (удалён в 0.4.0) | не нужен: единственный fetch — same-origin из content script, а `web_accessible_resources` в пакете нет. Охват задаёт только `content_scripts.matches`, см. §2 |
 | `optional_permissions` | отсутствуют | |
 | `content_security_policy` | отсутствует (дефолт MV3) | дефолтный CSP MV3 запрещает remote code — соответствует |
 | `background.service_worker` | **отсутствует** | фонового скрипта нет вообще; `src/background/` — пустой `.gitkeep` |
 | `default_locale` | отсутствует | локализации нет, см. §5 |
 | `content_scripts` | 1 скрипт, `matches: https://*/*/-/merge_requests/*`, `run_at: document_idle` | объявлен в [src/contents/gitlab-mr.tsx](../../src/contents/gitlab-mr.tsx) |
-| `action.default_popup` | `popup.html` | статическая заглушка [src/popup.tsx](../../src/popup.tsx) |
-| `web_accessible_resources` | 1 CSS-файл, для того же match-паттерна | сгенерировано Plasmo для стилей сайдбара |
+| `action.default_popup` | `popup.html` | переключатель вкл/выкл сайдбара [src/popup.tsx](../../src/popup.tsx) |
+| `web_accessible_resources` | **отсутствует** в пакете | Plasmo генерирует запись для CSS, но стили инлайнятся через `data-text:` и файл не эмитится, поэтому [build-store-zip.sh](../../scripts/build-store-zip.sh) вырезает висячую ссылку перед упаковкой |
 
 ## 2. Permissions → использование → обоснование
 
-API-permissions (`storage`, `tabs`, `clipboardWrite` и т.д.) **не запрашиваются**.
-Единственный используемый `chrome.*` API — `chrome.runtime.getManifest()`
-([src/sidebar/Sidebar.tsx:31-37](../../src/sidebar/Sidebar.tsx#L31-L37)), он
-permission не требует. Буфер обмена используется через `navigator.clipboard`
+Из API-permissions запрашивается **только `storage`** (с 0.4.0) — для настройки
+вкл/выкл сайдбара. `tabs`, `activeTab`, `scripting`, `clipboardWrite` и прочие
+**не запрашиваются**. Используемые `chrome.*` API: `chrome.runtime.getManifest()`
+([src/sidebar/Sidebar.tsx:31-37](../../src/sidebar/Sidebar.tsx#L31-L37), permission
+не требует) и `chrome.storage.local` + `chrome.storage.onChanged`
+([preferences.ts](../../src/shared/storage/preferences.ts)).
+Буфер обмена используется через `navigator.clipboard`
 из content script — в контексте страницы это не требует `clipboardWrite`
 (есть fallback на `document.execCommand('copy')`:
 [BrowserClipboardAdapter.ts:77-96](../../src/contexts/ai-dispatch/infrastructure/BrowserClipboardAdapter.ts#L77-L96)).
 
 | Permission | Где используется в коде | Обоснование для формы Store (одной фразой) |
 |---|---|---|
-| `host_permissions: https://*/*` | content script рендерит сайдбар на страницах MR ([gitlab-mr.tsx](../../src/contents/gitlab-mr.tsx)); fetch `discussions.json` с того же хоста ([fetchGitLabDiscussions.ts:107-111](../../src/lib/fetchGitLabDiscussions.ts#L107-L111)); отдача CSS через `web_accessible_resources` | «GitLab is self-hosted on private corporate domains that cannot be enumerated in the manifest. The script only matches the GitLab-specific `/-/merge_requests/` URL shape and mounts only on a real MR page; elsewhere it does nothing and issues no request.» |
-| `storage` | хранение состояния задач по MR в `chrome.storage.local` | «Remembers per-MR task state locally. Never leaves the browser.» |
+| `content_scripts.matches: https://*/*/-/merge_requests/*` | инъекция сайдбара на страницах MR ([gitlab-mr.tsx](../../src/contents/gitlab-mr.tsx)); fetch `discussions.json` с того же origin ([fetchGitLabDiscussions.ts:107-111](../../src/lib/fetchGitLabDiscussions.ts#L107-L111)) | «The extension declares **no** host permissions at all — it cannot make cross-origin requests or read other tabs. GitLab is self-hosted on private corporate domains that cannot be enumerated in the manifest, so the content script matches the GitLab-specific `/-/merge_requests/` URL shape; it mounts only on a real MR page and elsewhere does nothing and issues no request.» |
+| `storage` | настройка вкл/выкл сайдбара и свёрнутого состояния в `chrome.storage.local` ([preferences.ts](../../src/shared/storage/preferences.ts)) | «Stores two on/off booleans for the user's own UI preference. Local only, never transmitted.» |
 
-Почему широкий хост, а не список: Chrome допускает wildcard только в начале
-хоста, поэтому паттерн вида `https://gitlab.*/*` невозможен, а корпоративные
-инстансы носят произвольные имена (`git.acme.internal`, `code.corp.io`).
-Сужение обеспечивается не хостом, а формой пути и guard'ом в
+Почему широкий `matches`, а не список хостов: Chrome допускает wildcard только в
+начале хоста, поэтому паттерн вида `https://gitlab.*/*` невозможен, а
+корпоративные инстансы носят произвольные имена (`git.acme.internal`,
+`code.corp.io`). Сужение обеспечивается не хостом, а формой пути и guard'ом в
 `getRootContainer` (требуется числовой id MR).
 
-Замечание: `matches` в `content_scripts` сами по себе дают инъекцию; отдельный
-`host_permissions` нужен Plasmo для `web_accessible_resources.matches` и на
-warning-текст при установке не влияет сверх уже объявленных хостов.
+Почему `host_permissions` удалён (0.4.0): `matches` в `content_scripts` сами по
+себе дают инъекцию, а единственный сетевой вызов расширения — **same-origin**
+fetch из content script'а (`credentials: 'same-origin'`, URL строится от
+`window.location` той же страницы), для которого host-грант не требуется.
+`web_accessible_resources` в пакете нет. То есть право не использовалось ничем.
+
+Важно и честно: предупреждение «доступ ко всем сайтам» при установке
+**остаётся** — Chrome выводит его из объединения `host_permissions` и
+`content_scripts.matches`, а широкий `matches` необходим для self-hosted. Выигрыш
+не в тексте предупреждения, а в реальных возможностях: без host-гранта
+расширение не может делать cross-origin запросы и не имеет доступа к DOM других
+вкладок.
 
 ## 3. Данные: что собирается, куда передаётся, что хранится
 
@@ -88,11 +100,23 @@ Data Usage Disclosure) — но обрабатывается **только ло
 
 ### Хранение
 
-**Постоянного хранения нет.** Стор задач — `InMemoryReviewTaskStore`
+**Данные ревью не хранятся.** Стор задач — `InMemoryReviewTaskStore`
 ([reviewTaskMapper.ts:85](../../src/lib/reviewTaskMapper.ts#L85)), живёт в
 памяти content script и умирает при закрытии/перезагрузке вкладки.
-`chrome.storage`, `localStorage`, `sessionStorage`, `IndexedDB` не
-используются нигде в `src/` (проверено grep'ом — 0 совпадений).
+`localStorage`, `sessionStorage`, `IndexedDB` не используются нигде в `src/`.
+
+Единственное, что сохраняется (с 0.4.0) — **пользовательская настройка UI** в
+`chrome.storage.local`, под одним ключом `grb:preferences`:
+
+```json
+{ "enabled": true, "collapsed": false }
+```
+
+Два boolean'а, никаких персональных данных, содержимого MR или идентификаторов.
+Не передаётся никуда. До первого клика по переключателю в storage не пишется
+ничего вообще (отсутствующий ключ = значения по умолчанию), поэтому у
+пользователя, который не открывал popup, следа в storage нет.
+Реализация — [preferences.ts](../../src/shared/storage/preferences.ts).
 
 ### Куда данные «выходят» из расширения
 
@@ -109,6 +133,7 @@ file:line, diff hunk ([PromptEnvelope.ts:86-107](../../src/contexts/ai-dispatch/
 | Authentication information | Не собирается (используется существующая cookie-сессия GitLab, расширение её не читает и не хранит) | `credentials: 'same-origin'` |
 | Website content | **Обрабатывается локально, не передаётся** (текст обсуждений MR) | §3 выше |
 | Все остальные категории (health, financial, location, web history, user activity, communications…) | Не собирается | нет соответствующего кода |
+| Хранимая настройка (`storage`) | Не персональные данные: два boolean'а (вкл/выкл сайдбара, свёрнут ли он), только локально | §3 «Хранение» |
 | Продажа данных / передача третьим лицам / использование для кредитоспособности | Нет / Нет / Нет | сетевых передач кроме same-origin GitLab нет |
 
 ## 4. Remote hosted code
@@ -157,13 +182,25 @@ AI-провайдерам).
   зашит приватный self-hosted инстанс, затем хост выносился в `.env.local`, и
   Store-сборка поддерживала только `gitlab.com`. Это оставляло корпоративных
   пользователей — основную аудиторию — без работающего расширения. С 0.3.0
-  манифест объявляет `host_permissions: https://*/*`, а content script
+  манифест объявлял `host_permissions: https://*/*`, а content script
   матчится по `https://*/*/-/merge_requests/*`; env-подстановка удалена.
   **Цена решения, которую надо учитывать при ревью:** Chrome покажет при
   установке «Read and change all your data on all websites», а Store
   потребует обоснование broad host permissions — текст готов в
   [listing.md](listing.md) и §2 выше. Сужение достигается формой пути и
   guard'ом на числовой id MR, а не списком хостов.
+- **B-1 — сужено ещё раз (v0.4.0).** Ревью Store прислало предупреждение о
+  broad host permissions с рекомендацией `activeTab` либо списка хостов. Ни то,
+  ни другое не подходит: `activeTab` требует клика в каждой вкладке и ломает
+  авто-монтирование, а хосты self-hosted инстансов неизвестны на момент сборки.
+  Но выяснилось, что `host_permissions` **не использовался вообще** (fetch
+  same-origin, `web_accessible_resources` в пакете нет), поэтому он удалён.
+  Осталась одна претензия вместо двух, и обоснование стало сильнее: расширение
+  не имеет host-прав вовсе. Предупреждение при установке при этом не исчезает —
+  его даёт широкий `content_scripts.matches`; см. §2. Guard в
+  [build-store-zip.sh](../../scripts/build-store-zip.sh) теперь проверяет
+  отсутствие `host_permissions` и точное равенство `permissions` = `['storage']`
+  (set-equality, а не фильтрация — прежний guard пропускал удаление ключа).
 - **B-2 (branding) — закрыт (v0.3.0).** Иконка готова (`assets/icon.png`
   512×512 с альфа-скруглением, v0.2.4), скриншоты 1280×800 (6 шт.) и промо-
   плитки 440×280 / 1400×560 лежат в `docs/store/images/` —

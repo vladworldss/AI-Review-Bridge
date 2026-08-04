@@ -10,6 +10,13 @@ import {
 } from '../lib/reviewTaskMapper'
 import { dispatchFromStore } from '../lib/dispatchFromStore'
 import { Sidebar, type DispatchOutcome, type LoadState } from '../sidebar/Sidebar'
+import {
+  type Preferences,
+  chromePreferenceStorage,
+  readPreferences,
+  subscribePreferences,
+  writePreferences,
+} from '../shared/storage/preferences'
 
 import sidebarStyles from 'data-text:../sidebar/sidebar.css'
 
@@ -26,6 +33,17 @@ export const config: PlasmoCSConfig = {
 const ROOT_ID = 'grb-sidebar-root'
 const STYLE_ID = 'grb-sidebar-style'
 
+/**
+ * NOTE: the sidebar on/off preference is deliberately NOT checked here.
+ *
+ * This content script exports no anchor getter, so Plasmo builds no anchor
+ * observer and calls render() exactly ONCE at document_idle, with no retry. A
+ * container returned here is the only one we ever get — gate on the preference
+ * and toggling it back on could never show the sidebar without a page reload.
+ *
+ * The enabled check therefore lives in Content(), which returns null when off.
+ * Do not "optimize" it up into here.
+ */
 export const getRootContainer: PlasmoGetRootContainer = async () => {
   if (!isMergeRequestPage(window.location.href)) {
     return null as unknown as Element
@@ -94,6 +112,13 @@ function Content() {
   const [title, setTitle] = useState<string>(extractMrTitle())
   const lastMrIid = useRef<string | null>(null)
 
+  const storage = useMemo(() => chromePreferenceStorage(), [])
+  // null until storage resolves. Treated as "not enabled" so the first paint
+  // never fires a fetch a disabled user didn't ask for; the default-ON
+  // semantics live in normalizePreferences, not here.
+  const [prefs, setPrefs] = useState<Preferences | null>(null)
+  const enabled = prefs?.enabled ?? false
+
   const sync = useCallback(
     async (url: string) => {
       setState({ kind: 'loading' })
@@ -140,7 +165,40 @@ function Content() {
     [store],
   )
 
+  const setCollapsed = useCallback(
+    (next: boolean) => {
+      setPrefs((current) => ({
+        enabled: current?.enabled ?? true,
+        collapsed: next,
+      }))
+      void writePreferences(storage, { collapsed: next })
+    },
+    [storage],
+  )
+
   useEffect(() => {
+    let cancelled = false
+
+    void readPreferences(storage).then((p) => {
+      if (!cancelled) setPrefs(p)
+    })
+
+    // Fires in every tab, so toggling off in one hides the sidebar everywhere.
+    const unsubscribe = subscribePreferences(storage, (p) => {
+      if (!cancelled) setPrefs(p)
+    })
+
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [storage])
+
+  useEffect(() => {
+    // Gated on `enabled` so a disabled sidebar issues no discussions.json
+    // request at all — the render gate alone would still fetch.
+    if (!enabled) return
+
     void sync(window.location.href)
 
     const onUrlChange = () => {
@@ -149,7 +207,21 @@ function Content() {
     }
     window.addEventListener('grb:urlchange', onUrlChange)
     return () => window.removeEventListener('grb:urlchange', onUrlChange)
-  }, [sync])
+  }, [sync, enabled])
+
+  useEffect(() => {
+    // Drop tasks fetched before the toggle-off so re-enabling starts clean
+    // instead of flashing a stale list. Also covers a sync that resolved after
+    // the user disabled it.
+    if (enabled) return
+    store.clear()
+    lastMrIid.current = null
+    setState({ kind: 'loading' })
+  }, [enabled, store])
+
+  // Every hook must run before this early return (rules of hooks) — tsc will
+  // not catch a violation and this repo has no eslint.
+  if (!enabled) return null
 
   return (
     <Sidebar
@@ -157,6 +229,8 @@ function Content() {
       loadState={state}
       onRefresh={refresh}
       onDispatch={onDispatch}
+      collapsed={prefs?.collapsed ?? false}
+      onCollapsedChange={setCollapsed}
     />
   )
 }

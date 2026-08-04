@@ -22,6 +22,9 @@ Then open `chrome://extensions`, enable **Developer mode**, click **Load
 unpacked**, and select `build/chrome-mv3-prod/`. Open any GitLab merge request
 — the sidebar appears on the right.
 
+To hide it, click the extension icon and switch **Sidebar** off; the setting is
+remembered across merge requests and restarts.
+
 ## How it works
 
 - A single **content script** ([src/contents/gitlab-mr.tsx](src/contents/gitlab-mr.tsx))
@@ -35,8 +38,9 @@ unpacked**, and select `build/chrome-mv3-prod/`. Open any GitLab merge request
   `task-management` (ReviewTask aggregate and lifecycle), `ai-dispatch`
   (PromptEnvelope + clipboard).
 - Tasks are kept in an **in-memory store** rebuilt on each sync
-  ([src/lib/reviewTaskMapper.ts](src/lib/reviewTaskMapper.ts)) — nothing is
-  persisted.
+  ([src/lib/reviewTaskMapper.ts](src/lib/reviewTaskMapper.ts)) — no review data
+  is persisted. The only stored state is the on/off preference
+  ([src/shared/storage/preferences.ts](src/shared/storage/preferences.ts)).
 - "Send to AI" renders the thread (comment, replies, file:line, diff hunk) as
   a text prompt and **copies it to the clipboard**
   ([src/lib/dispatchFromStore.ts](src/lib/dispatchFromStore.ts)). The
@@ -47,17 +51,25 @@ Layering rules and the full architecture are documented in
 
 ## Permissions
 
-The extension requests **no Chrome API permissions** — only host access
-(see [docs/store/audit.md](docs/store/audit.md) for the full audit):
+The extension requests **no host permissions at all**, and exactly one Chrome API
+permission (see [docs/store/audit.md](docs/store/audit.md) for the full audit):
 
-| Host permission | Why |
+| Permission | Why |
 |---|---|
-| `https://gitlab.com/*` | Show the sidebar on MR pages and read that MR's discussions from GitLab itself |
+| `storage` | Remember your on/off and collapsed preference — two booleans, local only, never transmitted |
 
-**Self-hosted GitLab:** copy [.env.example](.env.example) to `.env.local`, set
-your instance's URL patterns, and `make build` — the host is substituted into
-the manifest at build time and never enters the repository or the Store build.
-(Runtime host configuration via the options UI is on the roadmap.)
+Where the sidebar may appear is defined solely by the content script's match
+pattern, `https://*/*/-/merge_requests/*`. It is broad because GitLab is usually
+self-hosted on private company domains that cannot be known at build time, and
+Chrome permits a wildcard only at the *start* of a host — so `https://gitlab.*/*`
+is not a valid pattern. **Self-hosted instances therefore work with no setup.**
+
+The sidebar mounts only when the URL is a real MR with a numeric id; anywhere
+else it renders nothing and makes no request. Because there is no host grant, the
+extension cannot make cross-origin requests or read any other tab.
+
+Chrome still shows "read and change all your data on all websites" at install —
+that warning comes from the match pattern, not from a host permission.
 
 ## Privacy
 
