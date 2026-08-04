@@ -13,15 +13,13 @@ import { Sidebar, type DispatchOutcome, type LoadState } from '../sidebar/Sideba
 
 import sidebarStyles from 'data-text:../sidebar/sidebar.css'
 
-// The second entry is substituted by Plasmo at build time from .env.local and
-// dropped from the array when the variable is unset (public/Store builds).
-// Whole-string "$VAR" form only — "$VAR/*" would survive as a literal when
-// unset and produce an invalid match pattern.
+// Broad match so corporate/self-hosted GitLab instances work out of the box —
+// their hostnames are unknowable at build time. The path shape
+// (/-/merge_requests/) is GitLab-specific, and getRootContainer below still
+// requires a numeric MR id before mounting anything, so non-GitLab sites that
+// happen to be matched get no sidebar and no network calls.
 export const config: PlasmoCSConfig = {
-  matches: [
-    'https://gitlab.com/*/-/merge_requests/*',
-    '$PLASMO_EXTRA_GITLAB_MR_MATCH',
-  ],
+  matches: ['https://*/*/-/merge_requests/*'],
   run_at: 'document_idle',
 }
 

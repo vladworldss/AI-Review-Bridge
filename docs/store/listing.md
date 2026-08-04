@@ -76,11 +76,10 @@ discussion to the clipboard as an AI-ready prompt.
 
 | Permission | Justification |
 |---|---|
-| Host: `https://gitlab.com/*` | Needed to display the review-task sidebar on GitLab merge request pages and read that MR's discussion data from GitLab itself. No data is sent anywhere. |
+| Host: `https://*/*` | GitLab is self-hosted by most companies on their own private domains, which are unknowable ahead of time, so the extension cannot enumerate them in the manifest. The content script only matches the GitLab-specific merge-request URL shape (`/-/merge_requests/`) and mounts only when the page is a real MR; on every other site it does nothing and makes no network request. The only request it ever makes is to `/-/merge_requests/<id>/discussions.json` **on the host you are already viewing**, using your existing session. No data is sent anywhere. |
 
-Это единственный хост в Store-сборке: self-hosted инстансы подключаются
-только в локальных сборках через `.env.local` (см. audit.md §2) и в
-Store-форме не фигурируют.
+Широкий хост — осознанный выбор ради работы на корпоративных GitLab
+без ручной настройки; см. обоснование в [audit.md](audit.md) §2 и §7 (B-1).
 
 ## Категория и язык
 
