@@ -39,6 +39,8 @@ WHAT IT DOES
 • Each task shows the reviewer, comment preview, reply count and file:line
 • "Send to AI" copies a structured prompt — MR title, the full comment
   thread, file and line, and the diff hunk — to your clipboard
+• "Send all" copies every open discussion at once, as a single prompt, so a
+  whole review fits in one paste
 • Fetches ALL discussions (paginated), so comments added after a rebase
   don't get lost
 • Skips system notes ("added 1 commit…") — only real human feedback becomes

@@ -1,6 +1,6 @@
 # GitLab AI Review Bridge
 
-Turn GitLab merge request review discussions into copy-ready AI task prompts — one click per review thread, straight to your clipboard.
+Turn GitLab merge request review discussions into copy-ready AI task prompts — one click per review thread, or all open threads at once, straight to your clipboard.
 
 ![Sidebar on a GitLab MR page](docs/store/images/screenshot-sidebar.png)
 <!-- TODO: real screenshot; scenarios listed in docs/store/assets-checklist.md -->
@@ -45,6 +45,10 @@ remembered across merge requests and restarts.
   a text prompt and **copies it to the clipboard**
   ([src/lib/dispatchFromStore.ts](src/lib/dispatchFromStore.ts)). The
   extension itself never calls any AI provider.
+- **"Send all"** copies every open thread as a single payload — one clipboard
+  write, tasks separated by a `---` rule under an `# N review tasks` header —
+  so a whole review can be pasted into one AI chat. A failed write marks the
+  whole batch FAILED rather than leaving part of it claiming success.
 
 Layering rules and the full architecture are documented in
 [docs/arch42/](docs/arch42/) and [CLAUDE.md](CLAUDE.md).

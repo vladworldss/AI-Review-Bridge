@@ -83,11 +83,32 @@ function clamp(value: string, max: number): string {
   return `${value.slice(0, max - 1)}…`
 }
 
+/**
+ * Render several envelopes as ONE clipboard payload, so a reviewer can paste
+ * every open discussion into an AI chat in a single go.
+ *
+ * A `---` rule separates the tasks: each envelope already starts with an `#`
+ * heading, and without a rule two tasks read as one continuing document. The
+ * count header tells the model up front how many independent items follow.
+ */
+export function renderEnvelopesAsText(envelopes: PromptEnvelope[]): string {
+  if (envelopes.length === 0) return ''
+  if (envelopes.length === 1) return renderEnvelopeAsText(envelopes[0]!)
+
+  const header = `# ${envelopes.length} review tasks`
+  const body = envelopes.map(renderEnvelopeAsText).join('\n\n---\n\n')
+  return `${header}\n\n${body}`
+}
+
 export function renderEnvelopeAsText(envelope: PromptEnvelope): string {
   const lines: string[] = []
   lines.push(`# Review task ${envelope.taskId}`)
   lines.push(`MR: ${envelope.mr.title} (id=${envelope.mr.id})`)
-  lines.push(`File: ${envelope.context.file}:${envelope.context.line}`)
+  if (envelope.context.file) {
+    lines.push(`File: ${envelope.context.file}:${envelope.context.line}`)
+  } else {
+    lines.push('File: (general discussion, no diff context)')
+  }
   lines.push('')
   lines.push('## Review comment')
   lines.push(envelope.review.comment)
@@ -98,10 +119,14 @@ export function renderEnvelopeAsText(envelope: PromptEnvelope): string {
       lines.push(`- @${m.author}: ${m.body}`)
     }
   }
-  lines.push('')
-  lines.push('## Diff hunk')
-  lines.push('```')
-  lines.push(envelope.context.diffHunk)
-  lines.push('```')
+  // An empty fence is pure noise — and multiplied across a "send all" batch it
+  // costs real tokens, so the section is dropped when there is no hunk.
+  if (envelope.context.diffHunk.trim()) {
+    lines.push('')
+    lines.push('## Diff hunk')
+    lines.push('```')
+    lines.push(envelope.context.diffHunk)
+    lines.push('```')
+  }
   return lines.join('\n')
 }

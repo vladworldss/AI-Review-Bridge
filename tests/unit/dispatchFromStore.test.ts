@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { dispatchFromStore, DispatchError } from '../../src/lib/dispatchFromStore'
+import {
+  dispatchAllFromStore,
+  dispatchFromStore,
+  DispatchError,
+} from '../../src/lib/dispatchFromStore'
 import { InMemoryReviewTaskStore } from '../../src/lib/reviewTaskMapper'
 import type { FetchedDiscussion } from '../../src/lib/fetchGitLabDiscussions'
 
@@ -122,5 +126,93 @@ describe('dispatchFromStore', () => {
     await dispatchFromStore(store, 'd-1', { clipboard: flakyClipboard })
     expect(store.get('d-1')?.state).toBe('DISPATCHED')
     expect(store.get('d-1')?.dispatches).toHaveLength(2)
+  })
+})
+
+function seededStoreMany() {
+  const store = new InMemoryReviewTaskStore(fixedClock(), idGen())
+  store.syncFromDiscussions({ iid: '40', title: 'Refactor auth' }, [
+    discussion(),
+    discussion({
+      discussionId: 'd-2',
+      filePath: 'auth/token.go',
+      line: 12,
+      notes: [
+        {
+          noteId: 'n2',
+          author: 'bob',
+          body: 'rename this',
+          createdAt: '2026-05-23T10:00:00Z',
+          isSystem: false,
+        },
+      ],
+    }),
+  ])
+  return store
+}
+
+describe('dispatchAllFromStore', () => {
+  it('writes ONE payload containing every open task', async () => {
+    const store = seededStoreMany()
+    const clipboard = vi.fn().mockResolvedValue(undefined)
+
+    const result = await dispatchAllFromStore(store, { clipboard })
+
+    expect(clipboard).toHaveBeenCalledTimes(1)
+    expect(result.discussionIds).toEqual(['d-1', 'd-2'])
+    expect(result.payload).toContain('# 2 review tasks')
+    expect(result.payload).toContain('race condition?')
+    expect(result.payload).toContain('rename this')
+    expect(result.payload).toContain('\n---\n')
+  })
+
+  it('marks every task DISPATCHED / SUCCESS', async () => {
+    const store = seededStoreMany()
+    await dispatchAllFromStore(store, { clipboard: vi.fn().mockResolvedValue(undefined) })
+
+    for (const id of ['d-1', 'd-2']) {
+      const snap = store.get(id)!
+      expect(snap.state).toBe('DISPATCHED')
+      expect(snap.dispatches.at(-1)?.outcome).toBe('SUCCESS')
+    }
+  })
+
+  it('marks the whole batch FAILED when the clipboard rejects — no partial SUCCESS', async () => {
+    const store = seededStoreMany()
+    const clipboard = vi.fn().mockRejectedValue(new Error('not allowed'))
+
+    await expect(dispatchAllFromStore(store, { clipboard })).rejects.toBeInstanceOf(
+      DispatchError,
+    )
+
+    for (const id of ['d-1', 'd-2']) {
+      const snap = store.get(id)!
+      expect(snap.state).toBe('FAILED')
+      expect(snap.dispatches.at(-1)?.outcome).toBe('FAILED')
+    }
+  })
+
+  it('skips resolved tasks', async () => {
+    const store = seededStoreMany()
+    store.getEntity('d-1')!.resolve()
+    const clipboard = vi.fn().mockResolvedValue(undefined)
+
+    const result = await dispatchAllFromStore(store, { clipboard })
+
+    expect(result.discussionIds).toEqual(['d-2'])
+    expect(result.payload).not.toContain('race condition?')
+    // Single remaining task → no batch header, same shape as a one-off copy.
+    expect(result.payload).toContain('# Review task')
+    expect(result.payload).not.toContain('# 1 review tasks')
+  })
+
+  it('throws when there is nothing open to send', async () => {
+    const store = seededStoreMany()
+    store.getEntity('d-1')!.resolve()
+    store.getEntity('d-2')!.resolve()
+
+    await expect(
+      dispatchAllFromStore(store, { clipboard: vi.fn() }),
+    ).rejects.toBeInstanceOf(DispatchError)
   })
 })

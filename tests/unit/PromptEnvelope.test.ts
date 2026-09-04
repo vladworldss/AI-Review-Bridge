@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildPromptEnvelope,
   renderEnvelopeAsText,
+  renderEnvelopesAsText,
 } from '../../src/contexts/ai-dispatch/domain'
 import type {
   CommentContext,
@@ -161,5 +162,54 @@ describe('renderEnvelopeAsText', () => {
       now: '2026-05-23T10:00:00Z',
     })
     expect(renderEnvelopeAsText(env)).not.toContain('## Thread')
+  })
+})
+
+describe('renderEnvelopesAsText', () => {
+  const envelopeFor = (id: string, comment: string) =>
+    buildPromptEnvelope({
+      task: makeSnapshot({
+        id,
+        context: makeContext({
+          discussionThread: [
+            { author: 'reviewer-alice', body: comment, createdAt: '2026-05-23T09:00:00Z' },
+          ],
+        }),
+      }),
+      agent: 'clipboard',
+      now: '2026-05-24T10:00:00Z',
+    })
+
+  it('returns an empty string for no envelopes', () => {
+    expect(renderEnvelopesAsText([])).toBe('')
+  })
+
+  it('renders a single envelope exactly like renderEnvelopeAsText — no batch header', () => {
+    const env = envelopeFor('task-001', 'only one')
+    expect(renderEnvelopesAsText([env])).toBe(renderEnvelopeAsText(env))
+  })
+
+  it('prefixes a count header and separates tasks with a rule', () => {
+    const text = renderEnvelopesAsText([
+      envelopeFor('task-001', 'first issue'),
+      envelopeFor('task-002', 'second issue'),
+    ])
+
+    expect(text.startsWith('# 2 review tasks')).toBe(true)
+    expect(text).toContain('# Review task task-001')
+    expect(text).toContain('# Review task task-002')
+    expect(text).toContain('first issue')
+    expect(text).toContain('second issue')
+    // One rule between the two tasks.
+    expect(text.match(/^---$/gm)).toHaveLength(1)
+  })
+
+  it('preserves each envelope body verbatim', () => {
+    const a = envelopeFor('task-001', 'first issue')
+    const b = envelopeFor('task-002', 'second issue')
+    const text = renderEnvelopesAsText([a, b])
+
+    expect(text).toContain(renderEnvelopeAsText(a))
+    expect(text).toContain(renderEnvelopeAsText(b))
   })
 })

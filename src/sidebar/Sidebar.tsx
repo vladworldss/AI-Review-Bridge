@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 
 import type { ReviewTaskSnapshot } from '../contexts/task-management/domain'
 
@@ -9,12 +9,15 @@ export type LoadState =
 
 export type DispatchOutcome = 'success' | 'error'
 export type DispatchHandler = (taskId: string) => Promise<DispatchOutcome>
+/** Copies every open task as one payload. Resolves to the number copied. */
+export type DispatchAllHandler = () => Promise<DispatchOutcome>
 
 export type SidebarProps = {
   mrTitle: string
   loadState: LoadState
   onRefresh: () => void
   onDispatch: DispatchHandler
+  onDispatchAll: DispatchAllHandler
   /** Controlled + persisted: the rail survives reloads and SPA navigation. */
   collapsed: boolean
   onCollapsedChange: (next: boolean) => void
@@ -44,6 +47,7 @@ export function Sidebar({
   loadState,
   onRefresh,
   onDispatch,
+  onDispatchAll,
   collapsed,
   onCollapsedChange,
 }: SidebarProps) {
@@ -51,6 +55,7 @@ export function Sidebar({
   // `showResolved` stays local — it's a transient view filter, not a preference.
   const [showResolved, setShowResolved] = useState(false)
   const [dispatchState, setDispatchState] = useState<Record<string, DispatchUiState>>({})
+  const [allState, setAllState] = useState<DispatchUiState>({ kind: 'idle' })
 
   const { openCount, resolvedCount, visible } = useMemo(() => {
     if (loadState.kind !== 'ok') {
@@ -66,6 +71,23 @@ export function Sidebar({
     }
   }, [loadState, showResolved])
 
+  // Keep per-task UI dispatch state in sync with the authoritative
+  // `loadState.tasks` dispatch history so a background batch action that
+  // mutates tasks (via Content) shows the final 'done'/'error' outcome.
+  useEffect(() => {
+    if (loadState.kind !== 'ok') return
+    setDispatchState((s) => {
+      const next = { ...s }
+      for (const t of loadState.tasks) {
+        const last = t.dispatches?.at(-1)
+        if (!last) continue
+        if (last.outcome === 'SUCCESS') next[t.id] = { kind: 'done', at: Date.now() }
+        else if (last.outcome === 'FAILED') next[t.id] = { kind: 'error', message: last.failureReason ?? 'Dispatch failed' }
+      }
+      return next
+    })
+  }, [loadState])
+
   const handleDispatch = async (taskId: string) => {
     setDispatchState((s) => ({ ...s, [taskId]: { kind: 'pending' } }))
     try {
@@ -80,6 +102,21 @@ export function Sidebar({
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Dispatch failed'
       setDispatchState((s) => ({ ...s, [taskId]: { kind: 'error', message } }))
+    }
+  }
+
+  const handleDispatchAll = async () => {
+    setAllState({ kind: 'pending' })
+    try {
+      const outcome = await onDispatchAll()
+      setAllState(
+        outcome === 'success'
+          ? { kind: 'done', at: Date.now() }
+          : { kind: 'error', message: 'Copy failed' },
+      )
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Copy failed'
+      setAllState({ kind: 'error', message })
     }
   }
 
@@ -122,6 +159,30 @@ export function Sidebar({
           </div>
 
           <SidebarStatus state={loadState} open={openCount} resolved={resolvedCount} />
+
+          {loadState.kind === 'ok' && openCount > 0 && (
+            <div className="grb-sidebar__bulk">
+              <button
+                type="button"
+                className="grb-sidebar__send-all"
+                onClick={handleDispatchAll}
+                disabled={allState.kind === 'pending'}
+                aria-label={`Copy AI prompt for all ${openCount} open discussions`}
+                title="Copy every open discussion as one prompt"
+              >
+                {allState.kind === 'pending'
+                  ? 'Copying…'
+                  : allState.kind === 'done'
+                    ? `✓ Copied ${openCount}`
+                    : `Send all (${openCount})`}
+              </button>
+              {allState.kind === 'error' && (
+                <span className="grb-task__error" title={allState.message}>
+                  ✗ {allState.message}
+                </span>
+              )}
+            </div>
+          )}
 
           <label className="grb-sidebar__toggle-row">
             <input

@@ -3,13 +3,13 @@
 Гейт публикации: **Branding** (иконки + скриншоты) + **Development**
 (рабочая сборка) + **Privacy Policy** (публичный URL) = **Publish**.
 
-Статусы актуализированы 2026-08-04 (v0.4.0). Репозиторий:
+Статусы актуализированы 2026-08-10 (v0.5.0). Репозиторий:
 https://github.com/vladworldss/AI-Review-Bridge
 
 ## Development
 
 - [x] `manifest_version: 3` — подтверждено в `build/chrome-mv3-prod/manifest.json`
-- [x] Версия в манифесте актуальна — 0.4.0 (host_permissions удалён, добавлен
+- [x] Версия в манифесте актуальна — 0.5.0 (host_permissions удалён, добавлен
   `storage`); при новых изменениях перед сабмитом бампнуть снова
 - [x] Нет обфускации; source читаем — только штатная минификация Plasmo,
   исходники в публичном репо
@@ -26,13 +26,13 @@ https://github.com/vladworldss/AI-Review-Bridge
 - [x] `make check` зелёный (154 теста) на текущем состоянии; повторить на
   финальном коммите перед упаковкой
 - [ ] **Smoke-тест пакета**: load unpacked из `build/chrome-mv3-prod`, открыть
-  MR, синк + «Send to AI» работают, версия в шапке сайдбара = 0.4.0
+  MR, синк + «Send to AI» + «Send all» работают, версия в шапке сайдбара = 0.5.0
 - [ ] **Smoke-тест переключателя (0.4.0)**: popup → Off убирает сайдбар без
   перезагрузки; On возвращает и пересинхронизирует; переход на другой MR
   (SPA-ссылкой и полной загрузкой) не требует повторного включения; при Off в
   DevTools Network нет запроса `discussions.json`
 - [ ] Финальный `./scripts/build-store-zip.sh` с коммита, который уйдёт в
-  Store (текущий: `dist/gitlab-ai-review-bridge-v0.4.0.zip`)
+  Store (текущий: `dist/gitlab-ai-review-bridge-v0.5.0.zip`)
 
 ## Listing / Review form (заполняется в кабинете Store)
 

@@ -60,9 +60,14 @@ Owns the `ReviewTask` aggregate and the sync rules.
 Turns a task snapshot into an agent-ready payload and ships it.
 
 - build a size-bounded `PromptEnvelope`
-- render envelope as text
+- render envelope as text (one task, or a whole batch as a single payload)
 - write to clipboard (`ClipboardPort` → `BrowserClipboardAdapter`)
 - record dispatch outcome back on the aggregate
+
+A batch dispatch ("Send all") is one clipboard write for N tasks: every
+aggregate transitions and its envelope is built *before* the write, and the
+outcome is then recorded on all of them together — so the batch is
+all-succeeded or all-failed, never partially marked.
 
 ## Aggregate: ReviewTask
 
