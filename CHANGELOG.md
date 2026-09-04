@@ -4,6 +4,48 @@ All notable changes to GitLab AI Review Bridge are documented here.
 Versions follow the `version` field in [package.json](package.json), which is
 what the sidebar header shows.
 
+## [0.5.0] — 2026-08-10
+
+### Send all open discussions in one paste
+
+Copying a review out of GitLab meant clicking "Send to AI" on every thread in
+turn and pasting each one separately. On an MR with a dozen open discussions
+that is a dozen round trips.
+
+There is now a **Send all (N)** button in the sidebar. One click copies every
+open discussion as a single prompt: an `# N review tasks` header, then each
+task separated by a `---` rule, ready to paste into one AI chat.
+
+- Only open threads are included — resolved and ignored tasks are skipped,
+  regardless of the "Show resolved" filter.
+- The clipboard is written **once, before any task is marked as sent**, so a
+  rejected write cannot leave half the batch claiming success. If the copy
+  fails, the whole batch is marked FAILED and can be retried.
+- With a single open thread the payload is byte-identical to a one-off copy —
+  no batch header is added for a batch of one.
+
+### Leaner prompts
+
+The rendered prompt used to include a `## Diff hunk` section even when there
+was no diff to show, and a bare `File: :0` line for general (non-diff)
+comments. Empty scaffolding like that costs tokens for nothing, and multiplied
+across a "send all" batch it adds up.
+
+- `## Diff hunk` is now **omitted entirely** when the discussion has no hunk.
+- `File:` reads `File: (general discussion, no diff context)` instead of
+  `File: :0`.
+
+This changes the single-thread payload too, deliberately — the shape is
+documented in [docs/arch42/11-api-contracts.md](docs/arch42/11-api-contracts.md).
+
+### Internal
+
+- New `dispatchAllFromStore` alongside `dispatchFromStore`, and a pure
+  `renderEnvelopesAsText` in the ai-dispatch domain; 37 new tests covering the
+  batch flow, its all-or-nothing failure marking, and the conditional sections.
+- Runtime view, DDD context, test cases, README and store listing updated for
+  the batch flow.
+
 ## [0.4.0] — 2026-08-04
 
 ### Turn the sidebar on and off

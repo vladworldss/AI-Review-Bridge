@@ -16,6 +16,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A version bump must ship its CHANGELOG entry in the same PR: the release
+  # tag is cut from the merge commit, so an entry added afterwards can never
+  # reach that release.
+  changelog:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a CHANGELOG entry when version changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          base_v="$(git show "$BASE:package.json" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version")"
+          head_v="$(git show "$HEAD:package.json" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version")"
+
+          if [ "$base_v" = "$head_v" ]; then
+            echo "version unchanged ($head_v) — CHANGELOG entry not required"
+            exit 0
+          fi
+
+          echo "version bumped: $base_v -> $head_v"
+
+          # The entry must exist in the PR head, not merely be touched: a
+          # reworded older section would otherwise satisfy a diff-only check.
+          if ! git show "$HEAD:CHANGELOG.md" | grep -qF "[$head_v]"; then
+            echo "::error file=CHANGELOG.md::No '[$head_v]' section in CHANGELOG.md. Add it in this PR — the release tag is cut from the merge commit." >&2
+            exit 1
+          fi
+
+          echo "CHANGELOG.md documents $head_v — OK"
+
   check:
     runs-on: ubuntu-latest
     steps:
