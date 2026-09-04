@@ -28,6 +28,23 @@ User clicks "Send to AI" on a task
   -> Sidebar re-renders with the new task state
 ```
 
+### Dispatch All ("Send all")
+
+```
+User clicks "Send all (N)" in the sidebar header area
+  -> dispatchAllFromStore(store, { agent: 'clipboard' })
+       -> open tasks = store.list() minus RESOLVED / IGNORED
+       -> for each: task.dispatch(agent) + buildPromptEnvelope(snapshot)
+       -> renderEnvelopesAsText(envelopes)      (one payload, '---' separated)
+       -> clipboard.write(payload)              (exactly ONE write)
+       -> all markDispatchSucceeded | all markDispatchFailed
+  -> Sidebar re-renders with the new task states
+```
+
+The clipboard is written **once, before any task is marked succeeded**, so a
+rejected write cannot leave part of the batch claiming SUCCESS. Throws when
+there is nothing open to send.
+
 ## Resolve Task
 
 ```

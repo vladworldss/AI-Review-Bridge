@@ -36,3 +36,24 @@ Rendered text payload (see `renderEnvelopeAsText`); the underlying `PromptEnvelo
   "generatedAt": "2026-06-08T12:00:00.000Z"
 }
 ```
+
+### Rendered text shape
+
+`renderEnvelopeAsText(envelope)` emits, in order: `# Review task <id>`, `MR:`,
+`File:`, `## Review comment`, `## Thread` (only when there are replies), and
+`## Diff hunk` fenced in triple backticks.
+
+Two sections are conditional, because a general (non-diff) discussion has
+neither and an empty heading is pure noise multiplied across a batch:
+
+- `## Diff hunk` is **omitted** when `context.diffHunk` is blank.
+- `File:` degrades to `File: (general discussion, no diff context)` when
+  `context.file` is empty (instead of a bare `File: :0`).
+
+`renderEnvelopesAsText(envelopes)` (used by "Send all") concatenates several
+rendered envelopes into one clipboard payload:
+
+- empty input → `''`; a single envelope → byte-identical to
+  `renderEnvelopeAsText`, with no batch header;
+- two or more → `# N review tasks` header, then each envelope separated by a
+  `\n\n---\n\n` rule (no rule directly after the header).
