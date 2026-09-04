@@ -62,3 +62,6 @@ CLAUDE.md
 .parcel-cache/
 build/
 dist/
+
+# Published extension artifacts
+/docs/store/images/*.png

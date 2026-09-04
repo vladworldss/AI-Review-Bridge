@@ -8,7 +8,7 @@ import {
 import {
   InMemoryReviewTaskStore,
 } from '../lib/reviewTaskMapper'
-import { dispatchFromStore } from '../lib/dispatchFromStore'
+import { dispatchAllFromStore, dispatchFromStore } from '../lib/dispatchFromStore'
 import { Sidebar, type DispatchOutcome, type LoadState } from '../sidebar/Sidebar'
 import {
   type Preferences,
@@ -165,6 +165,17 @@ function Content() {
     [store],
   )
 
+  const onDispatchAll = useCallback(async (): Promise<DispatchOutcome> => {
+    try {
+      await dispatchAllFromStore(store, { agent: 'clipboard' })
+      setState({ kind: 'ok', tasks: store.list() })
+      return 'success'
+    } catch {
+      setState({ kind: 'ok', tasks: store.list() })
+      return 'error'
+    }
+  }, [store])
+
   const setCollapsed = useCallback(
     (next: boolean) => {
       setPrefs((current) => ({
@@ -229,6 +240,7 @@ function Content() {
       loadState={state}
       onRefresh={refresh}
       onDispatch={onDispatch}
+      onDispatchAll={onDispatchAll}
       collapsed={prefs?.collapsed ?? false}
       onCollapsedChange={setCollapsed}
     />
